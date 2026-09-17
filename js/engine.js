@@ -38,6 +38,7 @@
       history: [],                       // {winner, points, type, cube}
       gameNo: 0,
       cubeEnabled: opts.cubeEnabled !== false,
+      gammons: opts.gammons !== false,   // score gammons x2 / backgammons x3 (off = every win is 1 x cube)
     };
   }
 
@@ -66,6 +67,7 @@
       turnStart: null,       // snapshot {points,bar,off} at start of move phase
       cube: { value: 1, owner: null },
       cubeEnabled: match.cubeEnabled && !match.crawfordGame,
+      gammons: match.gammons !== false,
       opening: { W: 0, B: 0, ties: 0 },
       winner: null,
       result: null,          // {points, type, reason}
@@ -390,6 +392,7 @@
   }
   function resign(g, p, type) {
     type = type || 'single';
+    if (g.gammons === false) type = 'single';
     const mult = type === 'backgammon' ? 3 : type === 'gammon' ? 2 : 1;
     finish(g, other(p), g.cube.value * mult, type, 'resign');
     g.lastAction = { type: 'resign', player: p };
@@ -401,7 +404,7 @@
       if (g.off[p] === 15) {
         const o = other(p);
         let type = 'single', mult = 1;
-        if (g.off[o] === 0) {
+        if (g.off[o] === 0 && g.gammons !== false) {
           type = 'gammon'; mult = 2;
           const [lo, hi] = homeRange(p);
           let inWinnerHome = g.bar[o] > 0;

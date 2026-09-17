@@ -186,4 +186,13 @@ t('openingRollFor: each side rolls one die, higher starts with both dice, ties r
   BG.roll(g2, () => 0.5); assert.strictEqual(g2.phase, 'move'); assert.deepStrictEqual(g2.dice, [4, 4]); // doubles allowed on a re-roll
 });
 
+t('gammons option off: every win scores 1 x cube', () => {
+  const m = BG.newMatch({ gammons: false }); const g = BG.newGame(m);
+  g.phase = 'move'; g.turn = 'W'; g.off.W = 15; g.off.B = 0; g.points = new Array(24).fill(0); g.points[2] = -15; // B still in W's home
+  g.cube.value = 2; BG.resign(g, 'B', 'backgammon');
+  assert.strictEqual(g.result.type, 'single'); assert.strictEqual(g.result.points, 2);
+  const m2 = BG.newMatch(); const g2 = BG.newGame(m2); g2.cube.value = 1; BG.resign(g2, 'B', 'backgammon');
+  assert.strictEqual(g2.result.points, 3);
+});
+
 console.log(passed + ' tests passed');

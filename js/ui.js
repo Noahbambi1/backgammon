@@ -33,11 +33,16 @@
     // ---------- geometry ----------
     layout() {
       const wrap = this.el.parentElement;
-      const ww = wrap.clientWidth - 12, wh = wrap.clientHeight - 8;
+      // available space = wrap minus its padding minus the frame drawn outside the board (box-shadow)
+      const cs = getComputedStyle(wrap), frame = 2 * (parseFloat(cs.getPropertyValue('--frame')) || 11);
+      const ww = wrap.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - frame;
+      const wh = wrap.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - frame;
       if (ww <= 0 || wh <= 0) return;
       let bw = ww, bh = Math.min(wh, bw * (15.5 / UNITS_W));
-      const minH = bw * (10.5 / UNITS_W);
-      if (bh < minH) { bh = wh; bw = bh / (10.5 / UNITS_W); }
+      // portrait boards are tall; in landscape we allow a flatter, wider board (classic table proportions)
+      const minRatio = ww > wh ? 0.58 : 10.5 / UNITS_W;
+      const minH = bw * minRatio;
+      if (bh < minH) { bh = wh; bw = Math.min(ww, bh / minRatio); }
       this.bw = bw; this.bh = bh;
       this.u = bw / UNITS_W;
       this.c = Math.min(this.u * 0.94, bh / 11.2); // checker diameter
@@ -75,8 +80,8 @@
       }
       const { row, slot } = this.pointPos(loc);
       const x = this.colX(slot) + this.u / 2;
-      const maxStack = H * 0.44;
-      const step = n <= 5 ? c : Math.min(c, (maxStack - c) / (n - 1));
+      const maxStack = H * 0.40; // keep stacks clear of the point tip so the number stays readable
+      const step = n <= 1 ? c : Math.min(c, (maxStack - c) / (n - 1)); // compress so the stack stays on the point
       const y = row === 'bottom' ? H - c / 2 - 2 - k * step : c / 2 + 2 + k * step;
       return { x, y };
     }

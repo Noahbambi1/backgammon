@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="css/style.css?v=14">
+<link rel="stylesheet" href="css/style.css?v=15">
 </head>
 <body>
 <div id="app">
@@ -46,7 +46,8 @@
         <div class="seg" id="bot-color"><button data-v="W" class="on">⚪ White</button><button data-v="B">⚫ Black</button></div></label>
       <label>Match length
         <div class="seg" id="bot-target"><button data-v="1">1</button><button data-v="3">3</button><button data-v="5" class="on">5</button><button data-v="7">7</button><button data-v="0">∞</button></div></label>
-      <label class="row"><span>Doubling cube</span><input type="checkbox" id="bot-cube" checked></label>
+      <label class="row"><span>Doubling cube</span><input type="checkbox" id="bot-cube"></label>
+      <label class="row"><span>Gammon ×2 / backgammon ×3 scoring</span><input type="checkbox" id="bot-gammons"></label>
       <button class="btn big primary" id="bot-start">Start Game</button>
     </div>
   </section>
@@ -59,7 +60,8 @@
       <label>⚫ Black player<input id="local-b" maxlength="16" placeholder="Player 2"></label>
       <label>Match length
         <div class="seg" id="local-target"><button data-v="1">1</button><button data-v="3">3</button><button data-v="5" class="on">5</button><button data-v="7">7</button><button data-v="0">∞</button></div></label>
-      <label class="row"><span>Doubling cube</span><input type="checkbox" id="local-cube" checked></label>
+      <label class="row"><span>Doubling cube</span><input type="checkbox" id="local-cube"></label>
+      <label class="row"><span>Gammon ×2 / backgammon ×3 scoring</span><input type="checkbox" id="local-gammons"></label>
       <label class="row"><span>Rotate board for player on move</span><input type="checkbox" id="local-rotate"></label>
       <button class="btn big primary" id="local-start">Start Game</button>
     </div>
@@ -74,7 +76,8 @@
         <h3>Create a game</h3>
         <label>Match length
           <div class="seg" id="online-target"><button data-v="1">1</button><button data-v="3">3</button><button data-v="5" class="on">5</button><button data-v="7">7</button><button data-v="0">∞</button></div></label>
-        <label class="row"><span>Doubling cube</span><input type="checkbox" id="online-cube" checked></label>
+        <label class="row"><span>Doubling cube</span><input type="checkbox" id="online-cube"></label>
+      <label class="row"><span>Gammon ×2 / backgammon ×3 scoring</span><input type="checkbox" id="online-gammons"></label>
         <button class="btn big primary" id="online-create">Create Room</button>
       </div>
       <div class="card">
@@ -106,7 +109,8 @@
       <label>Your name<input id="nearby-name" maxlength="16" placeholder="You"></label>
       <label>Match length
         <div class="seg" id="nearby-target"><button data-v="1">1</button><button data-v="3">3</button><button data-v="5" class="on">5</button><button data-v="7">7</button><button data-v="0">∞</button></div></label>
-      <label class="row"><span>Doubling cube</span><input type="checkbox" id="nearby-cube" checked></label>
+      <label class="row"><span>Doubling cube</span><input type="checkbox" id="nearby-cube"></label>
+      <label class="row"><span>Gammon ×2 / backgammon ×3 scoring</span><input type="checkbox" id="nearby-gammons"></label>
       <div class="two">
         <button class="btn big primary" id="nearby-host">I'll host (Step 1)</button>
         <button class="btn big" id="nearby-join">I'll join (Step 2)</button>
@@ -214,15 +218,15 @@
   <div class="toast" id="toast" hidden></div>
 </div>
 
-<script>window.APP_VERSION = '14';</script>
-<script src="vendor/qrcode.min.js?v=14"></script>
-<script src="vendor/jsQR.min.js?v=14"></script>
-<script src="js/config.js?v=14"></script>
-<script src="js/mqtt-lite.js?v=14"></script>
-<script src="js/engine.js?v=14"></script>
-<script src="js/ai.js?v=14"></script>
-<script src="js/net.js?v=14"></script>
-<script src="js/ui.js?v=14"></script>
-<script src="js/app.js?v=14"></script>
+<script>window.APP_VERSION = '15';</script>
+<script src="vendor/qrcode.min.js?v=15"></script>
+<script src="vendor/jsQR.min.js?v=15"></script>
+<script src="js/config.js?v=15"></script>
+<script src="js/mqtt-lite.js?v=15"></script>
+<script src="js/engine.js?v=15"></script>
+<script src="js/ai.js?v=15"></script>
+<script src="js/net.js?v=15"></script>
+<script src="js/ui.js?v=15"></script>
+<script src="js/app.js?v=15"></script>
 </body>
 </html>

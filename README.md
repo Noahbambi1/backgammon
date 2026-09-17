@@ -50,7 +50,7 @@ Bluetooth transport would plug into `js/app.js` unchanged.
 Opening roll — each player taps to roll one die, higher starts; the winner may play those two dice or roll again (house rule), ties re-roll · must play both dice when possible, otherwise the higher
 die · doubles play four times · hitting and entering from the bar · bearing off (exact die, or a higher
 die when no checker is farther back) · doubling cube with ownership, take/pass, redoubles to 64 ·
-Crawford rule in match play · gammon ×2, backgammon ×3 · match to 1/3/5/7 or unlimited (money game) ·
+Crawford rule in match play · optional gammon ×2 / backgammon ×3 scoring (off by default) · optional doubling cube (off by default) · match to 1/3/5/7 or unlimited (money game) ·
 undo within a turn · resign (single/gammon/backgammon) · pip counts · optional legal-move highlighting (off by default, Settings) ·
 auto-finish when no moves remain · resume an interrupted bot/local game.
 

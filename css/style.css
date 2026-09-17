@@ -10,12 +10,13 @@
   --bad: #e06c5c;
   --wood: #7a4a2a;
   --wood-dark: #5b3620;
-  --felt: #3b6b45;
-  --felt-dark: #2f5637;
-  --pt-a: #d9b98a;
-  --pt-b: #8a4a2c;
-  --white-chk: #f4efe6;
-  --black-chk: #2b2420;
+  /* classic wooden board: walnut frame, maple playing field, walnut / maple points */
+  --field: #c9a56d;
+  --field-dark: #b08a55;
+  --pt-a: rgba(92, 58, 30, .93);     /* dark walnut points */
+  --pt-b: rgba(242, 222, 176, .85);  /* pale maple points */
+  --white-chk: #efe3c9;
+  --black-chk: #3a2416;
   --radius: 14px;
   --safe-left: env(safe-area-inset-left, 0px); --safe-right: env(safe-area-inset-right, 0px); --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -101,30 +102,41 @@ input:focus, textarea:focus { border-color: var(--accent); }
 .cube.top { transform: translateY(-6px); } .cube.bottom { transform: translateY(6px); }
 
 .board-wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 4px 6px; position: relative; }
-.board { position: relative; touch-action: none; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
-.board-bg { position: absolute; inset: 0; background: linear-gradient(135deg, #8a5a34, #5e3a22); }
+.board { position: relative; touch-action: none; border-radius: 6px; overflow: hidden;
+  /* walnut frame drawn around the playing surface */
+  box-shadow: 0 0 0 8px #613a1e, 0 0 0 9px #2b1808, 0 0 0 11px #4b2c14, 0 10px 30px 8px rgba(0,0,0,.55); }
+.board-wrap { padding: 10px 12px; --frame: 11px; }
+.board-bg { position: absolute; inset: 0;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,0) 18%, rgba(0,0,0,0) 82%, rgba(0,0,0,.22)),
+    repeating-linear-gradient(94deg, #6a4022 0 7px, #5c361c 7px 10px, #714626 10px 19px, #62391e 19px 24px, #6d4324 24px 31px);
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,.35); }
 #points, #checkers, #hl { position: absolute; inset: 0; }
-.felt { position: absolute; background: radial-gradient(ellipse at 50% 40%, var(--felt), var(--felt-dark)); border-radius: 4px; box-shadow: inset 0 0 12px rgba(0,0,0,.45); }
-.bar { position: absolute; background: linear-gradient(180deg, #6b4126, #4e2d19); box-shadow: inset 0 0 10px rgba(0,0,0,.4); }
-.tray { position: absolute; background: #3a2416; border-radius: 4px; box-shadow: inset 0 0 8px rgba(0,0,0,.5); }
+.felt { position: absolute; border-radius: 3px;
+  background:
+    radial-gradient(ellipse at 50% 45%, rgba(255,255,255,.10), rgba(0,0,0,0) 55%, rgba(0,0,0,.18)),
+    repeating-linear-gradient(91deg, #cfab72 0 6px, #c4a068 6px 9px, #d6b47c 9px 17px, #c9a56d 17px 22px, #bf9b62 22px 26px);
+  box-shadow: inset 0 0 14px rgba(0,0,0,.5), inset 0 0 0 1px rgba(60,35,15,.5); }
+.bar { position: absolute; background: linear-gradient(90deg, rgba(0,0,0,.25), rgba(0,0,0,0) 30%, rgba(255,255,255,.06) 50%, rgba(0,0,0,0) 70%, rgba(0,0,0,.25)), repeating-linear-gradient(178deg, #5a351b 0 9px, #4e2d17 9px 12px, #613a1e 12px 20px); box-shadow: inset 0 0 10px rgba(0,0,0,.5); }
+.tray { position: absolute; background: repeating-linear-gradient(176deg, #3e2614 0 8px, #34200f 8px 11px, #442a16 11px 18px); border-radius: 4px; box-shadow: inset 0 0 10px rgba(0,0,0,.6), inset 0 0 0 1px rgba(0,0,0,.4); }
 .point { position: absolute; }
 .point svg { width: 100%; height: 100%; display: block; }
-.point .lbl { position: absolute; left: 0; right: 0; text-align: center; font-size: 9px; color: rgba(255,255,255,.55); pointer-events: none; }
+.point .lbl { position: absolute; left: 0; right: 0; text-align: center; font-size: 9px; color: rgba(40,22,8,.6); font-weight: 600; pointer-events: none; }
 .point.top .lbl { top: 100%; } .point.bottom .lbl { bottom: 100%; }
 .checker { position: absolute; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px;
   transition: left .28s cubic-bezier(.2,.8,.2,1), top .28s cubic-bezier(.2,.8,.2,1), transform .15s; will-change: left, top;
   box-shadow: 0 2px 3px rgba(0,0,0,.5), inset 0 -3px 5px rgba(0,0,0,.25), inset 0 2px 3px rgba(255,255,255,.35); }
-.checker.W { background: radial-gradient(circle at 40% 35%, #fff, #e6dccb 70%, #c8b9a0); color: #4a3a2a; }
-.checker.B { background: radial-gradient(circle at 40% 35%, #5a4b42, #2b2420 70%, #17120f); color: #ddd; }
+.checker.W { background: radial-gradient(circle at 40% 35%, #fbf5e6, #ead9b8 62%, #cdb58a); color: #4a3a2a; box-shadow: 0 2px 3px rgba(0,0,0,.5), inset 0 -3px 5px rgba(0,0,0,.22), inset 0 2px 3px rgba(255,255,255,.6), inset 0 0 0 2px rgba(120,90,50,.25); }
+.checker.B { background: radial-gradient(circle at 40% 35%, #7a5236, #47291a 62%, #2a170c); color: #f0e0c8; box-shadow: 0 2px 3px rgba(0,0,0,.55), inset 0 -3px 5px rgba(0,0,0,.35), inset 0 2px 3px rgba(255,255,255,.18), inset 0 0 0 2px rgba(0,0,0,.25); }
 .checker.selected { transform: translateY(-6%) scale(1.08); box-shadow: 0 0 0 3px var(--accent), 0 6px 10px rgba(0,0,0,.6); z-index: 5; }
 .checker.dragging { transition: none; z-index: 20; transform: scale(1.12); pointer-events: none; }
 .checker.flying { transition: left .3s ease-in-out, top .3s ease-in-out; z-index: 10; }
 .offchip { position: absolute; border-radius: 3px; box-shadow: 0 1px 2px rgba(0,0,0,.5); }
 .offchip.W { background: #eee5d5; } .offchip.B { background: #3a302a; border: 1px solid #555; }
 .hlpt { position: absolute; border-radius: 6px; pointer-events: none; animation: pulse 1.1s infinite; }
-.hlpt.dest { background: rgba(224,164,88,.28); box-shadow: inset 0 0 0 2px var(--accent); }
+.hlpt.dest { background: rgba(255,230,150,.35); box-shadow: inset 0 0 0 2px #f2c46a; }
 .hlpt.dest.far { background: rgba(224,164,88,.14); box-shadow: inset 0 0 0 2px rgba(224,164,88,.75); border-style: dashed; }
-.hlpt.src { box-shadow: inset 0 0 0 2px rgba(255,255,255,.55); background: rgba(255,255,255,.08); }
+.hlpt.src { box-shadow: inset 0 0 0 2px rgba(255,255,255,.7); background: rgba(255,255,255,.12); }
 .hlpt.last { box-shadow: inset 0 0 0 2px rgba(120,200,255,.6); animation: none; }
 @keyframes pulse { 0%,100% { opacity: .75; } 50% { opacity: 1; } }
 .banner { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%) scale(.9); background: rgba(20,12,6,.88); color: var(--text); padding: 14px 24px; border-radius: 14px; font-size: 20px; font-weight: 700; text-align: center; opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; max-width: 80%; z-index: 30; }
@@ -169,7 +181,7 @@ input:focus, textarea:focus { border-color: var(--accent); }
 .gamebar { order: 0; } .board-wrap { order: 1; } .controls { order: 2; }
 @media (orientation: landscape) and (max-height: 560px) {
   #screen-game { flex-direction: row; align-items: stretch; }
-  .board-wrap { order: 1; flex: 1; padding: 6px 4px 6px calc(6px + var(--safe-left, 0px)); }
+  .board-wrap { order: 1; flex: 1; padding: 8px 6px 8px calc(8px + var(--safe-left, 0px)); }
   .side { order: 2; display: flex; flex-direction: column; width: 220px; flex: none; padding: calc(4px + var(--safe-top)) calc(8px + var(--safe-right, 0px)) calc(6px + var(--safe-bottom)) 4px; gap: 6px; min-height: 0; }
   .gamebar { padding: 0; display: grid; grid-template-columns: 1fr auto; grid-template-areas: "score score" "menu cube"; gap: 6px; }
   .gamebar .scoreboard { grid-area: score; grid-template-columns: 1fr; gap: 4px; padding: 6px 8px; font-size: 13px; }
@@ -181,11 +193,13 @@ input:focus, textarea:focus { border-color: var(--accent); }
   .gamebar #game-menu { grid-area: menu; width: 100%; height: 36px; }
   .gamebar .cube { grid-area: cube; width: 36px; height: 36px; font-size: 14px; }
   .cube.top, .cube.bottom { transform: none; }
-  .controls { padding: 0; flex: 1; justify-content: flex-end; gap: 6px; }
+  .controls { padding: 0; flex: 1; justify-content: center; gap: 10px; }
   .status { font-size: 13px; height: auto; min-height: 32px; line-height: 16px; white-space: normal; }
   .dice { height: 44px; gap: 8px; } .die { width: 38px; height: 38px; }
   .buttons { flex-direction: column; height: auto; gap: 6px; }
-  .buttons .btn { width: 100%; min-width: 0; padding: 9px 10px; font-size: 15px; }
+  .buttons .btn { width: 100%; min-width: 0; padding: 10px 10px; font-size: 15px; }
+  .buttons .btn.primary { padding: 18px 10px; font-size: 20px; border-radius: 16px; box-shadow: 0 6px 16px rgba(0,0,0,.4); }
+  .dice { height: 56px; gap: 10px; } .die { width: 48px; height: 48px; }
   .banner { font-size: 16px; padding: 10px 16px; }
   .conn { top: 6px; left: 8px; transform: none; }
 }

@@ -157,7 +157,7 @@
   function newSession(cfg) {
     S = {
       mode: cfg.mode, level: cfg.level || null,
-      match: BG.newMatch({ target: cfg.target, cubeEnabled: cfg.cube, nameW: cfg.players.W.name, nameB: cfg.players.B.name }),
+      match: BG.newMatch({ target: cfg.target, cubeEnabled: cfg.cube, gammons: cfg.gammons, nameW: cfg.players.W.name, nameB: cfg.players.B.name }),
       game: null, players: cfg.players, rotate: !!cfg.rotate, net: cfg.net || null, isHost: cfg.isHost !== false,
       busy: false, selected: null, mySide: cfg.mySide || W, gameOverShown: false,
     };
@@ -632,6 +632,11 @@
     const g = S.game;
     const side = S.mode === 'local' ? g.turn : (isLocalHuman(W) ? W : B);
     const cube = g.cube.value;
+    if (g.gammons === false) {
+      showModal('Resign as ' + escapeHTML(myName(side)) + '?', `${escapeHTML(myName(BG.other(side)))} gets ${cube} point${cube > 1 ? 's' : ''}.`, [
+        { label: 'Resign', cls: 'danger', cb: () => doResign(side, 'single') }, { label: 'Cancel' }]);
+      return;
+    }
     showModal('Resign as ' + escapeHTML(myName(side)) + '?', 'Choose what to concede:', [
       { label: `Single game (${cube} pt)`, cls: 'danger', cb: () => doResign(side, 'single') },
       { label: `Gammon (${cube * 2} pts)`, cls: 'danger', cb: () => doResign(side, 'gammon') },
@@ -670,13 +675,13 @@
     const level = segVal('bot-level'); const color = segVal('bot-color');
     const botName = { easy: 'Bot (Easy)', medium: 'Bot (Medium)', hard: 'Bot (Hard)' }[level];
     const players = color === W ? { W: { name: me, type: 'human' }, B: { name: botName, type: 'bot' } } : { W: { name: botName, type: 'bot' }, B: { name: me, type: 'human' } };
-    newSession({ mode: 'bot', level, target: +segVal('bot-target'), cube: $('bot-cube').checked, players, mySide: color });
+    newSession({ mode: 'bot', level, target: +segVal('bot-target'), cube: $('bot-cube').checked, gammons: $('bot-gammons').checked, players, mySide: color });
     show('game'); lastAnnounced = null; tick();
   });
   $('local-start').addEventListener('click', () => {
     const w = nameOr($('local-w').value, 'Player 1'), b = nameOr($('local-b').value, 'Player 2');
     settings.names.w = w; settings.names.b = b; saveSettings();
-    newSession({ mode: 'local', target: +segVal('local-target'), cube: $('local-cube').checked, rotate: $('local-rotate').checked,
+    newSession({ mode: 'local', target: +segVal('local-target'), cube: $('local-cube').checked, gammons: $('local-gammons').checked, rotate: $('local-rotate').checked,
       players: { W: { name: w, type: 'human' }, B: { name: b, type: 'human' } }, mySide: W });
     show('game'); lastAnnounced = null; tick();
   });
@@ -722,7 +727,7 @@
         const cfg = S.pending; delete S.pending;
         const guestName = String(msg.name || 'Guest').slice(0, 16);
         const players = { W: { name: cfg.myName, type: 'human' }, B: { name: guestName, type: 'remote' } };
-        S.match = BG.newMatch({ target: cfg.target, cubeEnabled: cfg.cube, nameW: cfg.myName, nameB: guestName });
+        S.match = BG.newMatch({ target: cfg.target, cubeEnabled: cfg.cube, gammons: cfg.gammons, nameW: cfg.myName, nameB: guestName });
         S.players = players; S.game = BG.newGame(S.match); S.mySide = W;
         net.send({ t: 'welcome', side: B, players, match: S.match, game: BG.serialize(S.game), v: VERSION });
         show('game'); lastAnnounced = null; toast(guestName + ' joined!'); tick();
@@ -820,7 +825,7 @@
       const link = (IS_NATIVE ? WEB_URL : location.origin + location.pathname) + '?join=' + code;
       $('wait-share').onclick = () => shareText('Join my backgammon game', link);
       try { new QRCode($('wait-qr'), { text: link, width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M }); } catch (_) {}
-      S = { mode: 'online', net, isHost: true, pending: { myName: me, target: +segVal('online-target'), cube: $('online-cube').checked }, busy: false, selected: null, players: { W: { name: me, type: 'human' }, B: { name: '…', type: 'remote' } }, match: BG.newMatch({ nameW: me }), game: null, mySide: W, gameOverShown: false };
+      S = { mode: 'online', net, isHost: true, pending: { myName: me, target: +segVal('online-target'), cube: $('online-cube').checked, gammons: $('online-gammons').checked }, busy: false, selected: null, players: { W: { name: me, type: 'human' }, B: { name: '…', type: 'remote' } }, match: BG.newMatch({ nameW: me }), game: null, mySide: W, gameOverShown: false };
       S.game = BG.newGame(S.match);
       attachNet(net, true);
     } catch (e) { showModal('Could not create room', escapeHTML(e.message), [{ label: 'OK', cb: () => show('online') }]); net.close(); }
@@ -909,7 +914,7 @@
     $('pair-status').textContent = 'Preparing your code…';
     await ensureCamera(); // permission also unlocks real local IP candidates (shorter code, more reliable)
     try {
-      S = { mode: 'nearby', net: rtc, isHost: true, pending: { myName: me, target: +segVal('nearby-target'), cube: $('nearby-cube').checked }, busy: false, selected: null, players: { W: { name: me, type: 'human' }, B: { name: '…', type: 'remote' } }, match: BG.newMatch({ nameW: me }), game: null, mySide: W, gameOverShown: false };
+      S = { mode: 'nearby', net: rtc, isHost: true, pending: { myName: me, target: +segVal('nearby-target'), cube: $('nearby-cube').checked, gammons: $('nearby-gammons').checked }, busy: false, selected: null, players: { W: { name: me, type: 'human' }, B: { name: '…', type: 'remote' } }, match: BG.newMatch({ nameW: me }), game: null, mySide: W, gameOverShown: false };
       S.game = BG.newGame(S.match);
       const offer = await rtc.createOffer();
       showMyCode(offer, 'HOST CODE');
