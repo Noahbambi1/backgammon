@@ -17,20 +17,62 @@
   function speedMs(base) { return settings.speed === 'fast' ? base * 0.4 : settings.speed === 'slow' ? base * 1.8 : base; }
 
   // ---------------- sound ----------------
-  let actx = null;
+  let actx = null, noiseBuf = null, master = null;
+  function audio() {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume().catch(() => {});
+    if (!master) { master = actx.createGain(); master.gain.value = 0.9; master.connect(actx.destination); }
+    if (!noiseBuf) { noiseBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+    return actx;
+  }
+  // Synthesised sound effects (no audio files -> works offline, tiny). All shapes are short and soft.
+  function tone(t, { f = 440, f2, type = 'sine', a = 0.005, d = 0.2, v = 0.2, curve = 'exp' } = {}) {
+    const o = actx.createOscillator(), g = actx.createGain(); o.type = type; o.frequency.setValueAtTime(f, t);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + d);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + a);
+    if (curve === 'exp') g.gain.exponentialRampToValueAtTime(0.0001, t + d); else g.gain.linearRampToValueAtTime(0, t + d);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t + d + 0.02);
+  }
+  function noise(t, { d = 0.05, v = 0.2, f = 2000, q = 1, type = 'bandpass' } = {}) {
+    const src = actx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+    const flt = actx.createBiquadFilter(); flt.type = type; flt.frequency.value = f; flt.Q.value = q;
+    const g = actx.createGain(); g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    src.connect(flt); flt.connect(g); g.connect(master); src.start(t, Math.random() * 0.5); src.stop(t + d + 0.02);
+  }
+  const SFX = {
+    // checker set down on wood: soft knock + tiny click
+    click: t => { tone(t, { f: 190, f2: 120, type: 'sine', d: 0.09, v: 0.35 }); noise(t, { d: 0.03, v: 0.12, f: 3500, q: 0.7 }); },
+    // picking a checker up: lighter tick
+    pick: t => { tone(t, { f: 420, f2: 300, type: 'triangle', d: 0.05, v: 0.12 }); noise(t, { d: 0.02, v: 0.06, f: 5000 }); },
+    // hitting a blot: heavier double knock + low thud
+    hit: t => { tone(t, { f: 150, f2: 70, type: 'sine', d: 0.18, v: 0.5 }); noise(t, { d: 0.06, v: 0.25, f: 1800, q: 0.8 }); tone(t + 0.07, { f: 260, f2: 160, type: 'triangle', d: 0.1, v: 0.18 }); noise(t + 0.07, { d: 0.03, v: 0.1, f: 3000 }); },
+    // dice: rattle in the cup, then two landings
+    dice: t => {
+      for (let i = 0; i < 7; i++) { const s = t + i * 0.045 + Math.random() * 0.015; noise(s, { d: 0.035, v: 0.10 + Math.random() * 0.06, f: 2500 + Math.random() * 2500, q: 2 }); }
+      tone(t + 0.36, { f: 900 + Math.random() * 200, f2: 500, type: 'triangle', d: 0.06, v: 0.14 }); noise(t + 0.36, { d: 0.05, v: 0.22, f: 2200, q: 1 });
+      tone(t + 0.44, { f: 800 + Math.random() * 200, f2: 450, type: 'triangle', d: 0.06, v: 0.12 }); noise(t + 0.44, { d: 0.05, v: 0.2, f: 2000, q: 1 });
+    },
+    // doubling cube turned: firm clack
+    cube: t => { tone(t, { f: 320, f2: 180, type: 'square', d: 0.06, v: 0.08 }); noise(t, { d: 0.05, v: 0.2, f: 1500, q: 0.6 }); },
+    // your turn / attention: soft two-note chime
+    alert: t => { tone(t, { f: 880, type: 'sine', d: 0.25, v: 0.12 }); tone(t + 0.13, { f: 1175, type: 'sine', d: 0.35, v: 0.12 }); },
+    // won the game: warm major arpeggio with a shimmer on top
+    win: t => { [523, 659, 784, 1046].forEach((f, i) => { tone(t + i * 0.11, { f, type: 'sine', d: 0.5, v: 0.16 }); tone(t + i * 0.11, { f: f * 2, type: 'sine', d: 0.3, v: 0.04 }); }); tone(t + 0.55, { f: 1568, type: 'triangle', d: 0.7, v: 0.06 }); },
+    // won the whole match: longer fanfare
+    match: t => { [523, 659, 784, 1046, 784, 1046, 1318].forEach((f, i) => { tone(t + i * 0.12, { f, type: 'sine', d: 0.45, v: 0.16 }); tone(t + i * 0.12, { f: f / 2, type: 'triangle', d: 0.4, v: 0.05 }); }); },
+    // lost: gentle descending minor phrase
+    lose: t => { [392, 349, 311, 262].forEach((f, i) => tone(t + i * 0.16, { f, type: 'sine', d: 0.4, v: 0.13 })); },
+    // UI tap
+    ui: t => { tone(t, { f: 600, type: 'sine', d: 0.04, v: 0.06 }); },
+  };
   function beep(type) {
     if (!settings.sound) return;
-    try {
-      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-      const t = actx.currentTime;
-      const o = actx.createOscillator(), g = actx.createGain(); o.connect(g); g.connect(actx.destination);
-      if (type === 'click') { o.type = 'triangle'; o.frequency.value = 520; g.gain.setValueAtTime(.18, t); g.gain.exponentialRampToValueAtTime(.001, t + .08); o.start(t); o.stop(t + .09); }
-      else if (type === 'hit') { o.type = 'sawtooth'; o.frequency.setValueAtTime(300, t); o.frequency.exponentialRampToValueAtTime(90, t + .2); g.gain.setValueAtTime(.2, t); g.gain.exponentialRampToValueAtTime(.001, t + .22); o.start(t); o.stop(t + .23); }
-      else if (type === 'dice') { for (let i = 0; i < 4; i++) { const o2 = actx.createOscillator(), g2 = actx.createGain(); o2.connect(g2); g2.connect(actx.destination); o2.type = 'square'; o2.frequency.value = 800 + Math.random() * 600; const s = t + i * .06; g2.gain.setValueAtTime(.06, s); g2.gain.exponentialRampToValueAtTime(.001, s + .05); o2.start(s); o2.stop(s + .06); } }
-      else if (type === 'win') { [523, 659, 784, 1046].forEach((f, i) => { const o2 = actx.createOscillator(), g2 = actx.createGain(); o2.connect(g2); g2.connect(actx.destination); o2.frequency.value = f; const s = t + i * .12; g2.gain.setValueAtTime(.15, s); g2.gain.exponentialRampToValueAtTime(.001, s + .3); o2.start(s); o2.stop(s + .32); }); }
-      else if (type === 'lose') { o.frequency.setValueAtTime(300, t); o.frequency.exponentialRampToValueAtTime(120, t + .5); g.gain.setValueAtTime(.15, t); g.gain.exponentialRampToValueAtTime(.001, t + .5); o.start(t); o.stop(t + .5); }
-      else if (type === 'alert') { o.frequency.value = 880; g.gain.setValueAtTime(.12, t); g.gain.exponentialRampToValueAtTime(.001, t + .25); o.start(t); o.stop(t + .26); }
-    } catch (_) {}
+    try { const ctx = audio(); const fx = SFX[type]; if (fx) fx(ctx.currentTime); } catch (_) {}
+  }
+  function setMuted(m) { settings.sound = !m; saveSettings(); updateMuteUI(); if (!m) beep('ui'); }
+  function updateMuteUI() {
+    document.querySelectorAll('.mute-btn').forEach(b => { b.textContent = settings.sound ? '🔊' : '🔇'; b.title = settings.sound ? 'Mute sounds' : 'Unmute sounds'; b.setAttribute('aria-label', b.title); });
+    const c = document.getElementById('set-sound'); if (c) c.checked = !!settings.sound;
   }
   let userGestured = false;
   document.addEventListener('pointerdown', () => { userGestured = true; }, { capture: true, passive: true });
@@ -43,7 +85,7 @@
     if (id === 'game') { requestAnimationFrame(() => board.layout()); if (typeof autoFullscreen === 'function') autoFullscreen(); }
     if (id === 'menu' && typeof exitFullscreen === 'function') exitFullscreen();
   }
-  document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => { beep('click'); show(b.dataset.go); }));
+  document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => { beep('ui'); show(b.dataset.go); }));
   document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); beep('click');
@@ -196,7 +238,7 @@
         S.selected = null; render(); return;
       }
     }
-    if (loc !== 'off' && sources().includes(loc)) { S.selected = loc; beep('click'); render(); return; }
+    if (loc !== 'off' && sources().includes(loc)) { S.selected = loc; beep('pick'); render(); return; }
     // tap a destination directly when exactly one source can reach it (directly or in several steps)
     const cands = BG.legalNextMoves(g).filter(m => m.to === loc);
     let froms = Array.from(new Set(cands.map(m => m.from)));
@@ -466,7 +508,8 @@
     else { if (!g.recorded) return; r = g.matchResult; } // guest waits for the host's recorded result
     S.gameOverShown = true;
     const winnerLocal = isLocalHuman(g.winner);
-    beep(winnerLocal || S.mode === 'local' ? 'win' : 'lose'); buzz([60, 40, 60]);
+    const matchDone = r && r.matchOver;
+    beep(winnerLocal || S.mode === 'local' ? (matchDone ? 'match' : 'win') : 'lose'); buzz([60, 40, 60]);
     const typeTxt = g.result.type === 'backgammon' ? 'Backgammon! ' : g.result.type === 'gammon' ? 'Gammon! ' : '';
     const reason = g.result.reason === 'pass' ? ' (double declined)' : g.result.reason === 'resign' ? ' (resignation)' : '';
     let body = `${typeTxt}<b>${escapeHTML(myName(g.winner))}</b> wins <b>${g.result.points}</b> point${g.result.points > 1 ? 's' : ''}${reason}.<br><br>` +
@@ -649,7 +692,7 @@
         case 'undo': if (g.phase === 'move' && g.turn === guest) BG.undo(g); break;
         case 'end': if (g.phase === 'move' && g.turn === guest && BG.canEndTurn(g)) { BG.endTurn(g); lastAnnounced = null; broadcastState(); tick(); return; } break;
         case 'double': if (g.turn === guest && BG.canDouble(g, guest)) { BG.offerDouble(g); broadcastState(); tick(); return; } break;
-        case 'take': if (g.phase === 'double' && g.turn === S.mySide) { BG.acceptDouble(g); hideModal(); lastAnnounced = null; board.flashBanner(escapeHTML(myName(guest)) + ' takes', 'Cube is now ' + g.cube.value, 1300); broadcastState(); tick(); return; } break;
+        case 'take': if (g.phase === 'double' && g.turn === S.mySide) { BG.acceptDouble(g); hideModal(); lastAnnounced = null; board.flashBanner(escapeHTML(myName(guest)) + ' takes', 'Cube is now ' + g.cube.value, 1300); beep('cube'); broadcastState(); tick(); return; } break;
         case 'pass': if (g.phase === 'double' && g.turn === S.mySide) { BG.declineDouble(g); broadcastState(); tick(); return; } break;
         case 'resign': if (g.phase !== 'over') { BG.resign(g, guest, msg.type || 'single'); tickToken++; S.busy = false; broadcastState(); tick(); return; } break;
         case 'newgame': if (g.phase === 'over') { hideModal(); startNextGame(!!msg.rematch); return; } break;
@@ -678,7 +721,7 @@
     if (la && la.type === 'opening' && prev && prev.phase === 'opening') { beep('dice'); S.game = g; render(); $('dice').innerHTML = UI.openingDiceHTML(la.W, la.B, la.first); board.flashBanner(escapeHTML(g.turn === S.mySide ? 'You start' : myName(g.turn) + ' starts'), `${la.W} – ${la.B}`, 1600); S.busy = true; setTimeout(() => { if (S && S.game === g) { S.busy = false; tick(); } }, speedMs(1400)); return; }
     if (la && la.type === 'opening-tie') { beep('dice'); S.game = g; render(); $('dice').innerHTML = UI.openingDiceHTML(la.W, la.B); board.flashBanner('Tie! Roll again', `${la.W} – ${la.B}`, 1200); return; }
     if (la && la.type === 'double' && la.player === remote) beep('alert');
-    if (la && la.type === 'take' && la.player === remote) board.flashBanner(escapeHTML(myName(remote)) + ' takes', 'Cube is now ' + g.cube.value, 1300);
+    if (la && la.type === 'take' && la.player === remote) { beep('cube'); board.flashBanner(escapeHTML(myName(remote)) + ' takes', 'Cube is now ' + g.cube.value, 1300); }
     if (la && la.type === 'endturn') lastAnnounced = null;
     S.game = g;
     if (g.phase !== 'double') hideModalIfTake();
@@ -866,10 +909,14 @@
   });
   $('pair-cancel').addEventListener('click', () => { stopScan(); if (rtc) rtc.close(); rtc = null; S = null; show('nearby'); });
 
+  // ---------------- mute buttons ----------------
+  document.querySelectorAll('.mute-btn').forEach(b => b.addEventListener('click', () => setMuted(settings.sound)));
+  updateMuteUI();
+
   // ---------------- settings ----------------
   for (const [id, key] of [['set-sound', 'sound'], ['set-vibrate', 'vibrate'], ['set-hints', 'hints'], ['set-autodone', 'autodone'], ['set-pips', 'pips'], ['set-fullscreen', 'fullscreen']]) {
     $(id).checked = !!settings[key];
-    $(id).addEventListener('change', () => { settings[key] = $(id).checked; saveSettings(); if (S) render(); });
+    $(id).addEventListener('change', () => { settings[key] = $(id).checked; saveSettings(); updateMuteUI(); if (S) render(); });
   }
   document.querySelectorAll('#set-speed button').forEach(b => b.classList.toggle('on', b.dataset.v === settings.speed));
   if (settings.names.me) { $('bot-name').value = settings.names.me; $('online-name').value = settings.names.me; $('nearby-name').value = settings.names.me; }
@@ -890,7 +937,7 @@
   else show('menu');
 
   // unlock audio on first interaction
-  document.addEventListener('pointerdown', () => { if (settings.sound && !actx) beep('none'); }, { once: true });
+  document.addEventListener('pointerdown', () => { if (settings.sound) try { audio(); } catch (_) {} }, { once: true });
 
   // PWA
   // ---------------- updates / cache busting ----------------
@@ -923,5 +970,5 @@
   setInterval(applyUpdateCheck, 15 * 60 * 1000);
 
   // expose for debugging/testing
-  window.BGApp = { get session() { return S; }, tick, render, tryMove, doEndTurn, newSession, show, settings };
+  window.BGApp = { get session() { return S; }, tick, render, tryMove, doEndTurn, newSession, show, settings, beep };
 })();

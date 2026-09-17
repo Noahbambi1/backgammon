@@ -205,3 +205,18 @@ input:focus, textarea:focus { border-color: var(--accent); }
 .taunt { background: linear-gradient(135deg, rgba(224,164,88,.22), rgba(224,164,88,.06)); border: 1px solid rgba(224,164,88,.5); color: var(--text); border-radius: 12px; padding: 12px 14px; margin: 0 0 14px; font-size: 17px; font-style: italic; line-height: 1.35; }
 .taunt small { display: block; font-style: normal; color: var(--muted); margin-top: 6px; font-size: 13px; }
 .paircode-label b { color: var(--accent); letter-spacing: .5px; }
+
+/* ---- mute ---- */
+.menu-mute { position: absolute; top: calc(10px + var(--safe-top)); right: 12px; z-index: 5; }
+#screen-menu { position: relative; }
+.gamebar .mute-btn { width: 36px; height: 36px; padding: 0; font-size: 16px; flex: none; opacity: .7; }
+@media (orientation: portrait), (min-height: 561px) {
+  .gamebar .mute-btn { position: fixed; right: 10px; bottom: calc(10px + var(--safe-bottom)); z-index: 20; }
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  .gamebar { grid-template-areas: "score score score" "menu mute cube"; grid-template-columns: 1fr auto auto; }
+  .gamebar .mute-btn { grid-area: mute; height: 36px; width: 36px; }
+}
+@media (max-width: 360px) and (orientation: portrait) {
+  .sb-pips { display: none; }
+}

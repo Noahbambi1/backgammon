@@ -11,13 +11,14 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="css/style.css?v=9">
+<link rel="stylesheet" href="css/style.css?v=10">
 </head>
 <body>
 <div id="app">
 
   <!-- ===== MENU ===== -->
   <section class="screen active" id="screen-menu">
+    <button class="btn icon mute-btn menu-mute" title="Mute sounds">🔊</button>
     <div class="menu-wrap">
       <h1 class="logo"><span class="logo-dot w"></span>Backgammon<span class="logo-dot b"></span></h1>
       <p class="tagline">Tap or drag your checkers. Full rules, doubling cube, match play.</p>
@@ -184,6 +185,7 @@
         <div class="sb-player" id="sb-bottom"><span class="sb-dot"></span><span class="sb-name"></span><span class="sb-pips"></span><span class="sb-score"></span></div>
       </div>
       <div class="cube" id="cube" title="Doubling cube">64</div>
+      <button class="btn icon small mute-btn" title="Mute sounds">🔊</button>
     </header>
 
     <footer class="controls">
@@ -211,15 +213,15 @@
   <div class="toast" id="toast" hidden></div>
 </div>
 
-<script>window.APP_VERSION = '9';</script>
-<script src="vendor/peerjs.min.js?v=9"></script>
-<script src="vendor/qrcode.min.js?v=9"></script>
-<script src="vendor/jsQR.min.js?v=9"></script>
-<script src="js/config.js?v=9"></script>
-<script src="js/engine.js?v=9"></script>
-<script src="js/ai.js?v=9"></script>
-<script src="js/net.js?v=9"></script>
-<script src="js/ui.js?v=9"></script>
-<script src="js/app.js?v=9"></script>
+<script>window.APP_VERSION = '10';</script>
+<script src="vendor/peerjs.min.js?v=10"></script>
+<script src="vendor/qrcode.min.js?v=10"></script>
+<script src="vendor/jsQR.min.js?v=10"></script>
+<script src="js/config.js?v=10"></script>
+<script src="js/engine.js?v=10"></script>
+<script src="js/ai.js?v=10"></script>
+<script src="js/net.js?v=10"></script>
+<script src="js/ui.js?v=10"></script>
+<script src="js/app.js?v=10"></script>
 </body>
 </html>
