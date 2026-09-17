@@ -124,7 +124,35 @@
   function controller(side) { return side && S.players[side] ? S.players[side].type : null; }
   function isAuthority() { return !S.net || S.isHost; }
   function myName(side) { return S.players[side].name; }
-  function rng() { return Math.random(); }
+  // Dice randomness: OS cryptographic generator with rejection sampling, so every face has exactly 1/6
+  // probability (no modulo bias). Falls back to Math.random only if crypto is unavailable.
+  const rngBuf = new Uint32Array(64); let rngPos = rngBuf.length;
+  function rng() {
+    if (!(window.crypto && crypto.getRandomValues)) return Math.random();
+    for (;;) {
+      if (rngPos >= rngBuf.length) { crypto.getRandomValues(rngBuf); rngPos = 0; }
+      const x = rngBuf[rngPos++];
+      // 4294967295 = 2^32-1; reject the top sliver so floor(x/2^32 * 6) is exactly uniform in 0..5
+      if (x < 4294967292) return x / 4294967296;
+    }
+  }
+  // Roll statistics for the current match (shown in the game menu).
+  function recordRoll(dice, side) {
+    if (!S || !dice || !dice[0]) return;
+    const st = S.match.diceStats || (S.match.diceStats = { faces: [0, 0, 0, 0, 0, 0, 0], rolls: 0, doubles: 0, bySide: { W: 0, B: 0 }, pips: { W: 0, B: 0 } });
+    st.faces[dice[0]]++; st.faces[dice[1]]++; st.rolls++; if (dice[0] === dice[1]) st.doubles++;
+    if (side) { st.bySide[side]++; st.pips[side] += dice[0] === dice[1] ? dice[0] * 4 : dice[0] + dice[1]; }
+  }
+  function diceStatsHTML() {
+    const st = S.match.diceStats; if (!st || !st.rolls) return '<p class="hint">No dice rolled yet this match.</p>';
+    const total = st.rolls * 2, max = Math.max(...st.faces.slice(1), 1);
+    const bars = [1, 2, 3, 4, 5, 6].map(f => `<div class="dstat-row"><span>${f}</span><div class="dstat-bar"><i style="width:${Math.round(st.faces[f] / max * 100)}%"></i></div><span>${st.faces[f]} <small>(${(st.faces[f] / total * 100).toFixed(0)}%)</small></span></div>`).join('');
+    const exp = (100 / 6).toFixed(1), dbl = (st.doubles / st.rolls * 100).toFixed(0);
+    const avg = side => st.bySide[side] ? (st.pips[side] / st.bySide[side]).toFixed(1) : '–';
+    return `<div class="dstat"><div class="dstat-head">${st.rolls} rolls this match · ${total} dice · doubles ${dbl}% <small>(expected 17%)</small></div>${bars}
+      <div class="dstat-foot">Each face expected ≈ ${exp}%. Average pips per roll: <b>${escapeHTML(myName(W))}</b> ${avg(W)} · <b>${escapeHTML(myName(B))}</b> ${avg(B)} <small>(expected 8.2)</small>.<br>
+      Dice come from the device's cryptographic random generator; the bot never sees or influences a roll before it is made.</div></div>`;
+  }
 
   function newSession(cfg) {
     S = {
@@ -320,7 +348,7 @@
 
   async function doRoll() {
     const g = S.game; S.busy = true;
-    BG.roll(g, rng); beep('dice'); buzz(15);
+    BG.roll(g, rng); recordRoll(g.dice, g.turn); beep('dice'); buzz(15);
     render({ rollAnim: true }); broadcastState();
     await sleep(speedMs(500));
     S.busy = false;
@@ -399,6 +427,7 @@
     const la = g.lastAction;
     if (la.type === 'opening-die') { await sleep(speedMs(500)); S.busy = false; tick(); return; }
     if (la.type === 'opening-tie') { board.flashBanner('Tie! Roll again', `${la.W} – ${la.B}`, 1200); await sleep(speedMs(1200)); if (S.game === g) { S.busy = false; tick(); } return; }
+    recordRoll(g.dice, g.turn);
     board.flashBanner(escapeHTML(myName(g.turn)) + ' starts', `${myName(W)} rolled ${la.W}, ${myName(B)} rolled ${la.B}`, 1600);
     await sleep(speedMs(1400));
     if (S.game !== g) return;
@@ -558,7 +587,7 @@
     if (canResign) buttons.push({ label: 'Resign this game', cls: 'danger', cb: confirmResign });
     buttons.push({ label: 'Leave game', cls: 'danger', cb: () => showModal('Leave game?', S.net ? 'Your opponent will be disconnected.' : 'You can resume a bot or local game later from the menu.', [{ label: 'Leave', cls: 'danger', cb: leaveToMenu }, { label: 'Stay' }]) });
     buttons.push({ label: 'Continue' });
-    showModal('Match: ' + escapeHTML(myName(W)) + ' ' + m.scores.W + ' – ' + m.scores.B + ' ' + escapeHTML(myName(B)), hist, buttons);
+    showModal('Match: ' + escapeHTML(myName(W)) + ' ' + m.scores.W + ' – ' + m.scores.B + ' ' + escapeHTML(myName(B)), hist + '<details class="dstat-wrap"><summary>🎲 Dice statistics</summary>' + diceStatsHTML() + '</details>', buttons);
   });
   function confirmResign() {
     const g = S.game;
