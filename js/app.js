@@ -691,7 +691,13 @@
   function startScan() {
     if (!scanner) scanner = new Net.QRScanner($('pair-video'), $('pair-canvas'));
     $('pair-scan').hidden = false; $('pair-status').textContent = 'Point the camera at the other phone\'s code…';
-    scanner.start(code => { $('pair-scan').hidden = true; beep('click'); onPairCode(code); }).catch(e => { $('pair-scan').hidden = true; $('pair-status').textContent = 'Camera unavailable (' + e.message + '). Use "Paste code manually" instead.'; });
+    scanner.start(code => { $('pair-scan').hidden = true; beep('click'); onPairCode(code); }).catch(e => {
+      $('pair-scan').hidden = true;
+      const denied = /NotAllowed|Permission|denied|dismissed/i.test(e.name + ' ' + e.message);
+      $('pair-status').innerHTML = denied
+        ? 'Camera permission not granted. If your browser says it <b>can\'t ask for permission</b>, close floating bubbles/overlays from other apps (chat heads, assistant buttons, screen filters), then tap <b>Scan their code</b> again. Or use <b>Copy my code</b> → send it with Quick Share / Nearby Share (Bluetooth, works in airplane mode) → <b>Paste code manually</b> on the other phone.'
+        : 'Camera unavailable (' + escapeHTML(e.message) + '). Use "Copy my code" + "Paste code manually" instead.';
+    });
   }
   function stopScan() { if (scanner) scanner.stop(); $('pair-scan').hidden = true; }
   $('pair-scan-btn').addEventListener('click', startScan);
