@@ -9,6 +9,8 @@
  * js/net.js), which is no longer wired to the UI.
  */
 window.BG_CONFIG = {
+  // public address of the web version (used for invite links from the native apps)
+  webUrl: 'https://noahbambi1.github.io/backgammon/',
   brokers: [
     'wss://broker.emqx.io:8084/mqtt',
     'wss://broker.hivemq.com:8884/mqtt',

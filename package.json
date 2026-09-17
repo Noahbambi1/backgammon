@@ -1,0 +1,22 @@
+{
+  "name": "backgammon",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Backgammon: bot, same-device, online and offline nearby play",
+  "scripts": {
+    "test": "node test/engine.test.js && node test/ai.test.js",
+    "bump": "node bump.js",
+    "build": "node build-www.js",
+    "sync": "node build-www.js && npx cap sync",
+    "assets": "npx @capacitor/assets generate --iconBackgroundColor #1b1410 --iconBackgroundColorDark #1b1410 --splashBackgroundColor #1b1410 --splashBackgroundColorDark #1b1410",
+    "android": "node build-www.js && npx cap sync android && npx cap open android",
+    "ios": "node build-www.js && npx cap sync ios && npx cap open ios"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0"
+  }
+}

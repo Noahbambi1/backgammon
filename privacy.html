@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backgammon — Privacy Policy</title>
+<style>
+  body { font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif; max-width: 720px; margin: 0 auto; padding: 24px 18px 60px; line-height: 1.55; color: #222; background: #fff; }
+  h1 { font-size: 26px; margin-bottom: 4px; } h2 { font-size: 18px; margin-top: 28px; }
+  .muted { color: #666; font-size: 14px; }
+  @media (prefers-color-scheme: dark) { body { background: #1b1410; color: #eee; } .muted { color: #aaa; } a { color: #e0a458; } }
+</style>
+</head>
+<body>
+<h1>Privacy Policy — Backgammon</h1>
+<p class="muted">Last updated: 17 September 2026</p>
+
+<p>Backgammon is a game app made by Habanero Systems. It has <b>no accounts, no sign-up, no ads, no analytics and no tracking</b>. We do not collect, store or sell any personal data. This page explains exactly what the app does with data on your device and over the network.</p>
+
+<h2>Data stored on your device</h2>
+<p>Settings (sound, highlights, the display name you type) and an in-progress game against the bot or on the same device are saved in the app's local storage so you can pick up where you left off. This data never leaves your device and is deleted when you uninstall the app.</p>
+
+<h2>Online games (room codes)</h2>
+<p>When you play online, your moves, dice rolls and the display name you entered are sent to your opponent through public message-relay servers (MQTT brokers operated by EMQX, HiveMQ and the Eclipse Foundation). Before leaving your device every message is encrypted with a key derived from the room code that only the two players know, and the relay topic is a one-way hash of that code, so the relay operators see only encrypted data. As with any internet service, the relay operators can technically see your IP address while you are connected. Nothing is stored by us; we operate no servers.</p>
+
+<h2>Nearby games (no internet)</h2>
+<p>Nearby mode connects two phones directly over a local Wi-Fi / hotspot using WebRTC. No data goes to the internet. Pairing codes contain only the technical connection details for that session.</p>
+
+<h2>Camera</h2>
+<p>The camera is used solely to scan the other player's pairing QR code in Nearby mode, and only while the scanner is open. Images are processed on the device and are never saved or transmitted. You can pair without the camera by typing or pasting the code instead.</p>
+
+<h2>Children</h2>
+<p>The app is suitable for all ages and collects no data from anyone, including children.</p>
+
+<h2>Changes</h2>
+<p>If this policy changes, the new version will be published at this address with an updated date.</p>
+
+<h2>Contact</h2>
+<p>Questions: <a href="mailto:noah@habanerosystems.com">noah@habanerosystems.com</a></p>
+</body>
+</html>

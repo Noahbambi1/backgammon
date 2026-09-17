@@ -63,6 +63,11 @@ double) in one go, hopping visibly through each point. Tap the selected checker 
 play its only move. Roll / Double / Undo / Done buttons sit under the board. Keyboard on desktop:
 `R`/space roll or done, `U` undo, `D` double.
 
+## Native apps (App Store / Google Play)
+
+The repo contains Capacitor iOS and Android projects (`ios/`, `android/`), store icons/splash (`assets/`),
+store copy (`store/`) and the hosted privacy policy (`privacy.html`). Step-by-step instructions: **RELEASE.md**.
+
 ## Releasing a new version
 
 Run `node bump.js` before committing: it increments `version.json`, the `?v=N` on every asset in

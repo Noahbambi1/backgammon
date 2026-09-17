@@ -1,0 +1,11 @@
+{
+  "appId": "com.habanerosystems.backgammon",
+  "appName": "Backgammon",
+  "webDir": "www",
+  "server": { "androidScheme": "https" },
+  "ios": { "contentInset": "never", "backgroundColor": "#1b1410", "preferredContentMode": "mobile" },
+  "android": { "backgroundColor": "#1b1410", "allowMixedContent": false },
+  "plugins": {
+    "SplashScreen": { "launchShowDuration": 800, "launchAutoHide": true, "backgroundColor": "#1b1410", "showSpinner": false }
+  }
+}

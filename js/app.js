@@ -606,7 +606,13 @@
   function toggleFullscreen() { if (document.fullscreenElement || document.webkitFullscreenElement) exitFullscreen(); else enterFullscreen(); }
   // On phones, go fullscreen when a game starts (this runs inside the Start button's tap, which browsers
   // require). iOS Safari has no fullscreen API for pages — install to the home screen there instead.
-  const isTouchPhone = matchMedia('(pointer: coarse)').matches && !matchMedia('(display-mode: standalone)').matches;
+  // Running inside the native iOS/Android shell (Capacitor)? Then there is no browser bar to hide, the
+  // app updates through the store, and share links must point at the public web address.
+  const IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  const WEB_URL = (window.BG_CONFIG && window.BG_CONFIG.webUrl) || 'https://noahbambi1.github.io/backgammon/';
+  const isTouchPhone = !IS_NATIVE && matchMedia('(pointer: coarse)').matches && !matchMedia('(display-mode: standalone)').matches;
+  { const av = document.getElementById('about-version'); if (av) av.textContent = window.APP_VERSION || ''; }
+  if (IS_NATIVE) { document.documentElement.classList.add('native'); const fsRow = document.getElementById('set-fullscreen'); if (fsRow) fsRow.closest('label').hidden = true; }
   function autoFullscreen() { if (settings.fullscreen !== false && isTouchPhone) enterFullscreen(); }
 
   // ---------------- game menu ----------------
@@ -615,7 +621,7 @@
     const m = S.match;
     const hist = m.history.length ? '<div class="history">' + m.history.map(h => `<div><span>Game ${h.game}</span><span>${escapeHTML(myName(h.winner))} +${h.points}${h.type !== 'single' ? ' (' + h.type + ')' : ''}</span></div>`).join('') + '</div>' : '<p>No games finished yet.</p>';
     const buttons = [];
-    if (fsSupported()) buttons.push({ label: document.fullscreenElement ? 'Exit fullscreen' : '⛶ Fullscreen (hide browser bar)', cb: toggleFullscreen });
+    if (!IS_NATIVE && fsSupported()) buttons.push({ label: document.fullscreenElement ? 'Exit fullscreen' : '⛶ Fullscreen (hide browser bar)', cb: toggleFullscreen });
     const canResign = S.game.phase !== 'over' && S.game.phase !== 'opening' && S.game.phase !== 'openchoice' && (isLocalHuman(W) || isLocalHuman(B));
     if (canResign) buttons.push({ label: 'Resign this game', cls: 'danger', cb: confirmResign });
     buttons.push({ label: 'Leave game', cls: 'danger', cb: () => showModal('Leave game?', S.net ? 'Your opponent will be disconnected.' : 'You can resume a bot or local game later from the menu.', [{ label: 'Leave', cls: 'danger', cb: leaveToMenu }, { label: 'Stay' }]) });
@@ -811,7 +817,7 @@
     try {
       const code = await net.host();
       $('wait-code').textContent = code;
-      const link = location.origin + location.pathname + '?join=' + code;
+      const link = (IS_NATIVE ? WEB_URL : location.origin + location.pathname) + '?join=' + code;
       $('wait-share').onclick = () => shareText('Join my backgammon game', link);
       try { new QRCode($('wait-qr'), { text: link, width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M }); } catch (_) {}
       S = { mode: 'online', net, isHost: true, pending: { myName: me, target: +segVal('online-target'), cube: $('online-cube').checked }, busy: false, selected: null, players: { W: { name: me, type: 'human' }, B: { name: '…', type: 'remote' } }, match: BG.newMatch({ nameW: me }), game: null, mySide: W, gameOverShown: false };
@@ -1012,7 +1018,7 @@
   // deploy is picked up on the next load. On top of that we poll version.json: when a newer version is
   // live we reload automatically while on the menu, or offer a one-tap update during a game.
   let swReg = null, updateOffered = false;
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !params.has('nosw')) {
+  if (!IS_NATIVE && 'serviceWorker' in navigator && location.protocol.startsWith('http') && !params.has('nosw')) {
     navigator.serviceWorker.register('sw.js').then(r => { swReg = r; }).catch(() => {});
     let reloading = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (reloading) return; reloading = true; if (!S) location.reload(); });
@@ -1032,9 +1038,11 @@
       clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; t.onclick = null; t.style.cursor = ''; }, 8000);
     } catch (_) {}
   }
-  setTimeout(applyUpdateCheck, 3000);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) applyUpdateCheck(); });
-  setInterval(applyUpdateCheck, 15 * 60 * 1000);
+  if (!IS_NATIVE) {
+    setTimeout(applyUpdateCheck, 3000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) applyUpdateCheck(); });
+    setInterval(applyUpdateCheck, 15 * 60 * 1000);
+  }
 
   // expose for debugging/testing
   window.BGApp = { get session() { return S; }, tick, render, tryMove, doEndTurn, newSession, show, settings, beep };
