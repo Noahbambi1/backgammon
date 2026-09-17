@@ -667,6 +667,7 @@
       $('conn').textContent = '⚠ ' + reason; $('conn').hidden = false;
       if (!modalOpen) showModal('Connection lost', escapeHTML(reason) + '.<br>The game cannot continue without your opponent.', [{ label: 'Back to menu', cls: 'primary', cb: leaveToMenu }, { label: 'Stay on this screen' }]);
     };
+    net.onresume = () => { if (S && S.net === net && isHost) broadcastState(); };
     if (isHost) {
       // wait for hello
     } else {
@@ -739,9 +740,11 @@
     const newGame = prev && g.phase === 'opening' && prev.phase !== 'opening';
     if (newGame) { S.gameOverShown = false; hideModal(); }
     // animate remote move
+    const gen = (S.remoteGen = (S.remoteGen || 0) + 1);
     if (la && la.type === 'move' && la.player === remote && prev && prev.phase !== 'over') {
-      S.game = prev; board.render(prev);
-      board.animateMove(remote, la.move.from, la.move.to, la.move.hit).then(() => { S.game = g; beep(la.move.hit ? 'hit' : 'click'); tick(); });
+      // animate the opponent's move; if a newer state arrives while animating, that one wins
+      S.game = g; board.render(prev);
+      board.animateMove(remote, la.move.from, la.move.to, la.move.hit).then(() => { beep(la.move.hit ? 'hit' : 'click'); if (S && S.remoteGen === gen) tick(); else if (S) render(); });
       return;
     }
     if (la && la.type === 'roll' && la.player === remote) beep('dice');
@@ -762,10 +765,10 @@
   let pendingNet = null;
   $('online-create').addEventListener('click', async () => {
     const me = nameOr($('online-name').value, 'Host'); settings.names.me = me; saveSettings();
-    const net = new Net.PeerTransport(); pendingNet = net;
-    show('wait'); $('wait-code').textContent = '······'; $('wait-status').textContent = 'Connecting to matchmaking service…'; $('wait-qr').innerHTML = '';
+    const net = new Net.RelayTransport(); pendingNet = net;
+    show('wait'); $('wait-code').textContent = '······'; $('wait-status').textContent = 'Connecting to relay servers…'; $('wait-qr').innerHTML = '';
     net.onstatus = s => {
-      if (s === 'waiting') $('wait-status').innerHTML = 'Share this code. Waiting for your opponent to join…' + (net.hasTurn ? '' : '<br><small>⚠ No relay (TURN) server configured — two phones on mobile data may fail to connect. See js/config.js.</small>');
+      if (s === 'waiting') $('wait-status').innerHTML = 'Share this code. Waiting for your opponent to join…';
       if (s === 'connected') $('wait-status').textContent = 'Opponent connected!';
     };
     try {
@@ -785,14 +788,12 @@
     const code = (codeRaw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (code.length < 4) { toast('Enter the 6-character room code'); return; }
     const me = nameOr($('online-name').value, 'Guest'); settings.names.me = me; saveSettings();
-    const net = new Net.PeerTransport(); pendingNet = net;
-    show('wait'); $('wait-code').textContent = code; $('wait-qr').innerHTML = ''; $('wait-status').textContent = 'Contacting matchmaking server…'; $('wait-share').onclick = null;
+    const net = new Net.RelayTransport(); pendingNet = net;
+    show('wait'); $('wait-code').textContent = code; $('wait-qr').innerHTML = ''; $('wait-status').textContent = 'Connecting to relay servers…'; $('wait-share').onclick = null;
     net.onstatus = s => {
       const el = $('wait-status');
-      if (s === 'negotiating') el.textContent = 'Found the server — looking for the room…';
-      else if (s === 'ice:checking') el.textContent = 'Room found! Connecting the two phones… (can take up to 30 s)';
-      else if (s === 'ice:connected' || s === 'ice:completed') el.textContent = 'Connected! Starting…';
-      else if (s === 'ice:failed') el.textContent = 'Direct connection failed…';
+      if (s === 'negotiating') el.textContent = 'Connected to relay — looking for the host with this code…';
+      else if (s === 'connected') el.textContent = 'Host found! Starting…';
     };
     try {
       S = { mode: 'online', net, isHost: false, busy: false, selected: null, players: { W: { name: '…', type: 'remote' }, B: { name: me, type: 'human' } }, match: BG.newMatch(), game: null, mySide: B, gameOverShown: false };

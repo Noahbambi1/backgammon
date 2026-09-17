@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="css/style.css?v=11">
+<link rel="stylesheet" href="css/style.css?v=12">
 </head>
 <body>
 <div id="app">
@@ -82,7 +82,7 @@
         <label>Room code<input id="online-code" maxlength="6" placeholder="ABC123" autocapitalize="characters" autocomplete="off"></label>
         <button class="btn big" id="online-join">Join Room</button>
       </div>
-      <p class="hint">Both players need internet. Share the room code (or the link) with your opponent.</p>
+      <p class="hint">Both players need internet. Share the room code (or the link) with your opponent. Moves travel encrypted through public relay servers — no account needed.</p>
     </div>
   </section>
 
@@ -213,15 +213,15 @@
   <div class="toast" id="toast" hidden></div>
 </div>
 
-<script>window.APP_VERSION = '11';</script>
-<script src="vendor/peerjs.min.js?v=11"></script>
-<script src="vendor/qrcode.min.js?v=11"></script>
-<script src="vendor/jsQR.min.js?v=11"></script>
-<script src="js/config.js?v=11"></script>
-<script src="js/engine.js?v=11"></script>
-<script src="js/ai.js?v=11"></script>
-<script src="js/net.js?v=11"></script>
-<script src="js/ui.js?v=11"></script>
-<script src="js/app.js?v=11"></script>
+<script>window.APP_VERSION = '12';</script>
+<script src="vendor/qrcode.min.js?v=12"></script>
+<script src="vendor/jsQR.min.js?v=12"></script>
+<script src="js/config.js?v=12"></script>
+<script src="js/mqtt-lite.js?v=12"></script>
+<script src="js/engine.js?v=12"></script>
+<script src="js/ai.js?v=12"></script>
+<script src="js/net.js?v=12"></script>
+<script src="js/ui.js?v=12"></script>
+<script src="js/app.js?v=12"></script>
 </body>
 </html>

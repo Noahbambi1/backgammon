@@ -1,9 +1,9 @@
 // Service worker: network-first with an offline cache, so the app installs as a PWA and keeps
 // working with no internet (in-flight "Nearby" mode). Bump CACHE when shipping a new version.
-const VERSION = '11'; // bumped by `node bump.js`
+const VERSION = '12'; // bumped by `node bump.js`
 const CACHE = 'backgammon-v' + VERSION;
-const ASSETS = ['./', './index.html', './css/style.css', './js/config.js', './js/engine.js', './js/ai.js', './js/net.js', './js/ui.js', './js/app.js',
-  './vendor/peerjs.min.js', './vendor/qrcode.min.js', './vendor/jsQR.min.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
+const ASSETS = ['./', './index.html', './css/style.css', './js/config.js', './js/mqtt-lite.js', './js/engine.js', './js/ai.js', './js/net.js', './js/ui.js', './js/app.js',
+  './vendor/qrcode.min.js', './vendor/jsQR.min.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));

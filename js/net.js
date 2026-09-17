@@ -1,5 +1,6 @@
 /* Networking: two transports with the same tiny interface.
- *   PeerTransport  – online play via PeerJS (WebRTC + free public signaling), room codes.
+ *   RelayTransport – online play relayed through free public MQTT brokers (encrypted), room codes.
+ *   PeerTransport  – legacy WebRTC/PeerJS transport (needs a TURN server; not wired to the UI).
  *   LocalRTC       – offline "nearby" play: raw WebRTC data channel on a local network/hotspot,
  *                    signaled by hand through QR codes (no internet needed).
  * Interface: t.onopen, t.onmessage(obj), t.onclose(reason), t.send(obj), t.close()
@@ -102,6 +103,134 @@
     send(obj) { if (this.conn && this.conn.open) { this.conn.send(obj); return true; } return false; }
     get connected() { return !!(this.conn && this.conn.open); }
     close() { this.closed = true; try { this.conn && this.conn.close(); } catch (_) {} try { this.peer && this.peer.destroy(); } catch (_) {} }
+  }
+
+  // ---------------- Relay (online) via free public MQTT brokers ----------------
+  // No accounts, no TURN: both phones connect to several public brokers over WebSocket and exchange
+  // small encrypted messages on a topic derived from the room code. Every message is published to every
+  // connected broker and de-duplicated on receipt, so one flaky broker costs nothing.
+  const DEFAULT_BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081/mqtt'];
+  const te = new TextEncoder(), td = new TextDecoder();
+  const b64 = { enc: u8 => btoa(String.fromCharCode(...u8)), dec: s => Uint8Array.from(atob(s), c => c.charCodeAt(0)) };
+  async function roomKeys(code) {
+    // topic id and AES key both derived from the code; brokers only ever see the hash + ciphertext
+    const base = await crypto.subtle.importKey('raw', te.encode(code), 'PBKDF2', false, ['deriveBits']);
+    const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: te.encode('bgmm-relay-v1'), iterations: 20000, hash: 'SHA-256' }, base, 512));
+    const key = await crypto.subtle.importKey('raw', bits.slice(0, 32), 'AES-GCM', false, ['encrypt', 'decrypt']);
+    const topicId = Array.from(bits.slice(32, 44), b => b.toString(16).padStart(2, '0')).join('');
+    return { key, topicId };
+  }
+  class RelayTransport {
+    constructor(opts) {
+      opts = opts || {};
+      this.brokers = (CFG.brokers && CFG.brokers.length ? CFG.brokers : DEFAULT_BROKERS).slice();
+      this.clients = []; this.onopen = null; this.onmessage = null; this.onclose = null; this.onstatus = null; this.onresume = null;
+      this.closed = false; this.connected = false; this.seq = 0; this.seen = new Map(); this.peerId = null; this.me = makeCode(8);
+      this.lastHeard = 0; this._timers = [];
+    }
+    _status(s) { if (this.onstatus) this.onstatus(s); }
+    async _setup(code, isHost) {
+      this.code = code; this.isHost = isHost;
+      const { key, topicId } = await roomKeys(code); this.key = key;
+      this.topicIn = `bgmm/v1/${topicId}/${isHost ? 'g' : 'h'}`;   // what I listen to
+      this.topicOut = `bgmm/v1/${topicId}/${isHost ? 'h' : 'g'}`;  // what I publish
+      let ok = 0;
+      await Promise.all(this.brokers.map(url => this._connectBroker(url).then(() => ok++).catch(() => {})));
+      if (!ok) throw new Error('Could not reach any relay server. Check your internet connection (some Wi-Fi networks block WebSockets).');
+      // heartbeat + liveness
+      this._timers.push(setInterval(() => { if (this.connected) this._raw({ _t: 'hb' }); }, 8000));
+      this._timers.push(setInterval(() => { if (this.connected && Date.now() - this.lastHeard > 40000) this._lost('Opponent disconnected'); }, 5000));
+      return ok;
+    }
+    async _connectBroker(url, attempt) {
+      if (this.closed) return;
+      const c = new MqttLite(url, { clientId: 'bgmm', keepalive: 30, timeout: 8000 });
+      c.onmessage = (topic, bytes) => this._recv(bytes);
+      c.onclose = () => { // reconnect with backoff while the transport is alive
+        this.clients = this.clients.filter(x => x !== c);
+        if (!this.closed) setTimeout(() => this._connectBroker(url, (attempt || 0) + 1).catch(() => {}), Math.min(30000, 1000 * Math.pow(2, attempt || 0)));
+      };
+      await c.connect();
+      c.subscribe(this.topicIn);
+      this.clients.push(c);
+      // after a reconnect, re-announce so the other side can re-sync
+      if (attempt && this.connected) this._raw({ _t: this.isHost ? 'welcome' : 'hello', resume: true });
+    }
+    async _raw(obj) {
+      if (!this.key) return false;
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const plain = te.encode(JSON.stringify({ n: ++this.seq, from: this.me, m: obj }));
+      const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, this.key, plain));
+      const out = new Uint8Array(12 + ct.length); out.set(iv, 0); out.set(ct, 12);
+      let sent = 0; for (const c of this.clients) if (c.publish(this.topicOut, out)) sent++;
+      return sent > 0;
+    }
+    async _recv(bytes) {
+      try {
+        const iv = bytes.slice(0, 12), ct = bytes.slice(12);
+        const plain = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, this.key, ct));
+        const env = JSON.parse(td.decode(plain));
+        if (!env || env.from === this.me) return;
+        const k = env.from + ':' + env.n; if (this.seen.has(k)) return; this.seen.set(k, Date.now());
+        // brokers may deliver out of order: the host's messages are full snapshots, so a stale one is dropped
+        this.lastN = this.lastN || {};
+        if (!this.isHost && env.n < (this.lastN[env.from] || 0)) return;
+        this.lastN[env.from] = Math.max(this.lastN[env.from] || 0, env.n);
+        if (this.seen.size > 500) for (const [kk, t] of this.seen) { if (Date.now() - t > 60000) this.seen.delete(kk); }
+        this.lastHeard = Date.now();
+        const m = env.m;
+        if (this.isHost) {
+          if (m._t === 'hello') {
+            if (this.peerId && this.peerId !== env.from && this.connected) return; // room is taken
+            const first = !this.connected; this.peerId = env.from; this.connected = true;
+            this._raw({ _t: 'welcome' });
+            if (first) { this._status('connected'); if (this.onopen) this.onopen(); }
+            else if (this.onresume) this.onresume();
+            return;
+          }
+          if (env.from !== this.peerId) return;
+        } else {
+          if (m._t === 'welcome') {
+            const first = !this.connected; this.peerId = env.from; this.connected = true;
+            if (first) { this._status('connected'); if (this._joinResolve) this._joinResolve(); if (this.onopen) this.onopen(); }
+            else if (m.resume && this.onresume) this.onresume();
+            return;
+          }
+          if (this.peerId && env.from !== this.peerId) return;
+        }
+        if (m._t === 'hb') return;
+        if (m._t === 'bye') { this._lost('Opponent left the game'); return; }
+        if (this.onmessage) this.onmessage(m);
+      } catch (_) { /* not for us / corrupted */ }
+    }
+    _lost(reason) { if (this.closed) return; this.connected = false; if (this.onclose) this.onclose(reason); }
+    async host(code) {
+      code = code || makeCode(6); this._status('connecting');
+      await this._setup(code, true); this._status('waiting');
+      return code;
+    }
+    join(code) {
+      return new Promise(async (resolve, reject) => {
+        try {
+          code = code.toUpperCase().replace(/[^A-Z0-9]/g, ''); this._status('connecting');
+          await this._setup(code, false); this._status('negotiating');
+          this._joinResolve = resolve;
+          let tries = 0;
+          const t = setInterval(() => {
+            if (this.connected || this.closed) { clearInterval(t); return; }
+            this._raw({ _t: 'hello' });
+            if (++tries > 20) { clearInterval(t); reject(new Error('No host answered with code ' + code + '. Check the code and make sure the host is still on the "waiting for opponent" screen.')); }
+          }, 1000);
+          this._timers.push(t);
+        } catch (e) { reject(e); }
+      });
+    }
+    send(obj) { if (!this.connected) return false; this._raw(obj); return true; }
+    close() {
+      if (this.closed) return; if (this.connected) this._raw({ _t: 'bye' });
+      this.closed = true; this.connected = false; this._timers.forEach(clearInterval);
+      setTimeout(() => { for (const c of this.clients) c.close(); this.clients = []; }, 150);
+    }
   }
 
   // ---------------- Manual WebRTC (nearby / no internet) ----------------
@@ -328,5 +457,5 @@
     stop() { this.running = false; if (this.stream) { this.stream.getTracks().forEach(t => t.stop()); this.stream = null; } this.video.srcObject = null; }
   }
 
-  root.BGNet = { PeerTransport, LocalRTC, QRScanner, makeCode, compactSDP, expandSDP, groupCode, b32enc, b32dec, getIceServers, hasTurn };
+  root.BGNet = { PeerTransport, RelayTransport, LocalRTC, QRScanner, makeCode, compactSDP, expandSDP, groupCode, b32enc, b32dec, getIceServers, hasTurn };
 })(window);

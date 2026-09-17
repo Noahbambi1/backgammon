@@ -1,23 +1,19 @@
 /* Deployment configuration — edit this file, no build step needed.
  *
- * ONLINE PLAY NEEDS A TURN RELAY. Two phones on mobile data almost always sit behind carrier NATs
- * that block direct peer-to-peer connections; a TURN server relays the (encrypted) traffic. STUN alone
- * only works when at least one side has a "friendly" NAT (typical home Wi-Fi).
+ * ONLINE PLAY goes through public MQTT brokers over WebSocket (free, no account). Both phones connect to
+ * every broker in the list, publish each (AES-GCM encrypted) message to all of them and de-duplicate on
+ * receipt, so a single broker being down or flaky does not matter. Add your own broker here if you like
+ * (e.g. a Mosquitto you run), or remove ones you don't trust.
  *
- * Easiest free option: Metered.ca Open Relay (20 GB/month free — a backgammon match is a few KB).
- *   1. Sign up at https://dashboard.metered.ca/signup  (free)
- *   2. Dashboard → TURN Server → copy the "credentials" URL, it looks like
- *      https://<your-app>.metered.live/api/v1/turn/credentials?apiKey=XXXXXXXX
- *   3. Paste it as turnCredentialsUrl below and redeploy.
- * The app fetches short-lived TURN credentials from that URL each time a room is created/joined.
- *
- * Alternatively hard-code servers in iceServers (e.g. your own coturn):
- *   iceServers: [{ urls: 'stun:stun.l.google.com:19302' },
- *                { urls: ['turn:turn.example.com:3478', 'turns:turn.example.com:443?transport=tcp'], username: 'u', credential: 'p' }]
+ * iceServers / turnCredentialsUrl are only used by the legacy WebRTC transport (PeerTransport in
+ * js/net.js), which is no longer wired to the UI.
  */
 window.BG_CONFIG = {
-  turnCredentialsUrl: '',
-  iceServers: [
-    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  brokers: [
+    'wss://broker.emqx.io:8084/mqtt',
+    'wss://broker.hivemq.com:8884/mqtt',
+    'wss://test.mosquitto.org:8081/mqtt',
   ],
+  turnCredentialsUrl: '',
+  iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
 };

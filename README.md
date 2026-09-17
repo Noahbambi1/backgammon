@@ -15,15 +15,17 @@ caches everything so the installed app works offline. HTTPS matters: the camera 
 WebRTC only work on HTTPS or localhost. Over plain `http://<your-LAN-ip>` the app runs, but the QR
 scanner is unavailable — use the "Paste code manually" fallback in Nearby mode.
 
-## Online play needs a TURN relay (one-time setup)
+## How online play connects (no accounts, no servers of your own)
 
-Two phones on mobile data sit behind carrier NATs and usually cannot connect directly; a TURN server
-relays the encrypted traffic. The free relay that PeerJS used to bundle is gone, so **configure your
-own in `js/config.js`** — the easiest is Metered's free Open Relay (20 GB/month; a whole match is a
-few KB): sign up at https://dashboard.metered.ca/signup, copy the TURN "credentials" URL from the
-dashboard (`https://<app>.metered.live/api/v1/turn/credentials?apiKey=…`) and paste it as
-`turnCredentialsUrl`. Until then the waiting screen shows a warning and phones on the same Wi-Fi /
-home networks will still connect; two phones both on mobile data probably won't.
+Two phones on mobile data sit behind carrier NATs and usually cannot talk to each other directly, and
+the free WebRTC relays that PeerJS used to bundle are gone. So online games are relayed through
+**public MQTT brokers** (EMQX, HiveMQ and Eclipse Mosquitto each run one for anyone to use, over
+WebSocket, no sign-up). Both phones connect to all three, publish every message to all of them and
+de-duplicate on receipt, so one broker being down or slow costs nothing. Payloads are AES-GCM
+encrypted with a key derived from the room code, and the topic name is a hash of it, so the brokers
+only see ciphertext. Sockets reconnect automatically (e.g. after the phone screen was off) and the
+host re-sends the full game state. The MQTT client is our own 120-line implementation
+(`js/mqtt-lite.js`), so nothing heavy is downloaded. Broker list: `js/config.js`.
 
 ## Modes
 
@@ -31,7 +33,7 @@ home networks will still connect; two phones both on mobile data probably won't.
 |---|---|
 | **Play vs Bot** | Easy (random legal play), Medium (positional heuristics, 1-ply), Hard (2-ply expectimax over all 21 opponent rolls, equity-based cube decisions). Pick your colour, match length, cube on/off. |
 | **Two Players · Same Device** | Enter both names; the game announces whose turn it is, keeps the match score, and can rotate the board for the player on move. |
-| **Play Online · Room Code** | One player taps *Create Room* and shares the 6-letter code (or link/QR). The other taps *Join*. Peer-to-peer WebRTC via PeerJS's free public signalling server; no game data touches a server after connecting. |
+| **Play Online · Room Code** | One player taps *Create Room* and shares the 6-letter code (or link/QR). The other taps *Join*. Encrypted messages relayed through free public MQTT brokers — works on any network, no account needed (see below). |
 | **Nearby · No Internet** | For flights: one phone turns on Personal Hotspot, the other joins that Wi-Fi. Host shows a code (QR + a short text code), guest enters it, guest shows a reply code, host enters it — a direct WebRTC link on the local network, zero internet. Codes are ~70–90 characters of typo-tolerant base32 (no I/L/O/U, case-insensitive, dashes optional, checksum), so they can be scanned, copied, shared via Quick Share/AirDrop/Bluetooth, or simply read aloud and typed. |
 
 ### Why Nearby uses hotspot + QR instead of Bluetooth
@@ -76,7 +78,8 @@ js/engine.js          rules engine (pure, JSON-serialisable state; also runs in 
 js/ai.js              bot (three levels)
 js/ui.js              board rendering, tap/drag input, animations, dice
 js/config.js          deployment config: STUN/TURN servers
-js/net.js             PeerTransport (online), LocalRTC (nearby), QRScanner
+js/mqtt-lite.js       tiny MQTT-over-WebSocket client
+js/net.js             RelayTransport (online via public brokers), LocalRTC (nearby), QRScanner, legacy PeerTransport
 bump.js               version bump for cache busting
 js/app.js             screens, game loop, bot orchestration, host-authoritative sync
 sw.js, manifest.webmanifest, icons/   PWA
