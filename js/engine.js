@@ -258,6 +258,30 @@
     return out;
   }
 
+  // Multi-step moves of ONE checker: every destination reachable from `from` by playing 2+ consecutive
+  // legal moves with the same checker (e.g. 8/13 with a 5 then 13/18 with another 5). Returns
+  // { dest: [move, move, ...] } — the shortest chain per destination. Single-step moves are excluded.
+  function chainMoves(g, from) {
+    const out = {};
+    if (g.phase !== 'move') return out;
+    const maxSteps = g.remaining.length;
+    const rec = (state, chain) => {
+      if (chain.length >= maxSteps) return;
+      const cur = chain.length ? chain[chain.length - 1].to : from;
+      if (cur === 'off') return;
+      for (const m of legalNextMoves(state)) {
+        if (m.from !== cur) continue;
+        const next = deserialize(serialize(state));
+        move(next, m.from, m.to, m.die);
+        const nc = chain.concat([m]);
+        if (nc.length >= 2 && (!out[m.to] || out[m.to].length > nc.length)) out[m.to] = nc;
+        rec(next, nc);
+      }
+    };
+    rec(g, []);
+    return out;
+  }
+
   function canEndTurn(g) {
     if (g.phase !== 'move') return false;
     const plays = consistentPlays(g);
@@ -390,7 +414,7 @@
 
   return {
     W, B, other, sign, newMatch, newGame, openingRoll, roll, move, playMoves, undo, endTurn,
-    legalNextMoves, legalPlays, uniquePlays, consistentPlays, canEndTurn, isTurnComplete,
+    legalNextMoves, legalPlays, uniquePlays, consistentPlays, canEndTurn, isTurnComplete, chainMoves,
     canDouble, offerDouble, acceptDouble, declineDouble, resign, recordResult,
     pipCount, allHome, countAt, cloneBoard, applyMove, singleMoves, boardKey,
     serialize, deserialize, describeMove, pointLabel, snapshot, entryPoint, homeRange, initialPoints,

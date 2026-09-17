@@ -176,8 +176,8 @@
       this._renderHighlights();
     }
 
-    setSelection(selected, dests, sources) {
-      this.selected = selected; this.dests = dests || []; this.sources = sources || [];
+    setSelection(selected, dests, sources, farDests) {
+      this.selected = selected; this.dests = dests || []; this.sources = sources || []; this.farDests = farDests || [];
       if (this.game) this.render(this.game);
     }
     setLastMove(m) { this.lastMove = m; }
@@ -188,7 +188,7 @@
       const rect = (loc, p, cls) => { const r = this.rectFor(loc, p); return `<div class="hlpt ${cls}" style="left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px"></div>`; };
       if (this.showHints !== false) {
         for (const s of this.sources) if (s !== this.selected) html += rect(s, g.turn, 'src');
-        for (const d of this.dests) html += rect(d, g.turn, 'dest');
+        for (const d of this.dests) html += rect(d, g.turn, (this.farDests || []).includes(d) ? 'dest far' : 'dest');
       }
       this.hlEl.innerHTML = html;
     }

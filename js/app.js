@@ -97,9 +97,17 @@
     const g = S.game; if (g.phase !== 'move') return [];
     const set = new Set(); for (const m of BG.legalNextMoves(g)) set.add(m.from); return Array.from(set);
   }
-  function destsFor(from) {
+  function directDests(from) {
     const set = new Set(); for (const m of BG.legalNextMoves(S.game)) if (m.from === from) set.add(m.to); return Array.from(set);
   }
+  // Direct destinations plus multi-step ("full roll") destinations for the same checker.
+  function destsFor(from) {
+    const direct = directDests(from);
+    const chains = BG.chainMoves(S.game, from);
+    const far = Object.keys(chains).map(k => (k === 'off' ? 'off' : +k)).filter(d => !direct.includes(d));
+    return direct.concat(far);
+  }
+  function farDestsFor(from) { const d = directDests(from); return destsFor(from).filter(x => !d.includes(x)); }
   function perspective() {
     if (!S) return W;
     if (S.mode === 'local') return S.rotate && S.game.turn ? S.game.turn : W;
@@ -112,7 +120,7 @@
     board.showHints = settings.hints;
     board.setPerspective(perspective());
     const srcs = (!S.busy && g.phase === 'move' && isLocalHuman(g.turn)) ? sources() : [];
-    board.setSelection(S.selected, S.selected !== null ? destsFor(S.selected) : [], srcs);
+    board.setSelection(S.selected, S.selected !== null ? destsFor(S.selected) : [], srcs, S.selected !== null ? farDestsFor(S.selected) : []);
     board.render(g, opts);
     // scoreboard
     const bottom = perspective(), top = BG.other(bottom);
@@ -179,9 +187,10 @@
       }
     }
     if (loc !== 'off' && sources().includes(loc)) { S.selected = loc; beep('click'); render(); return; }
-    // tap a destination directly when exactly one source can reach it
+    // tap a destination directly when exactly one source can reach it (directly or in several steps)
     const cands = BG.legalNextMoves(g).filter(m => m.to === loc);
-    const froms = Array.from(new Set(cands.map(m => m.from)));
+    let froms = Array.from(new Set(cands.map(m => m.from)));
+    if (!froms.length) froms = sources().filter(s => destsFor(s).includes(loc));
     if (froms.length === 1) { tryMove(froms[0], loc); return; }
     S.selected = null; render();
   }
@@ -189,12 +198,39 @@
     const g = S.game;
     if (S.busy || g.phase !== 'move' || !isLocalHuman(g.turn)) return false;
     let m;
-    try { m = BG.move(g, from, to); } catch (e) { return false; }
+    try { m = BG.move(g, from, to); } catch (e) { m = null; }
+    if (m) {
+      S.selected = null;
+      beep(m.hit ? 'hit' : 'click'); if (m.hit) buzz(30);
+      netSend({ t: 'action', a: 'move', from, to, die: m.die });
+      afterMove();
+      return true;
+    }
+    // Not a single move: maybe the same checker can get there in several steps (full roll in one go)
+    const chain = BG.chainMoves(g, from)[to];
+    if (!chain) return false;
     S.selected = null;
-    beep(m.hit ? 'hit' : 'click'); if (m.hit) buzz(30);
-    netSend({ t: 'action', a: 'move', from, to, die: m.die });
-    afterMove();
+    playChain(g, chain);
     return true;
+  }
+  // Play a multi-step move of one checker, animating every hop so the path is visible.
+  async function playChain(g, chain) {
+    S.busy = true;
+    const turn = g.turn;
+    board.render(g, { immediate: true }); // if the checker was dragged, snap it back to its origin first
+    for (let i = 0; i < chain.length; i++) {
+      const step = chain[i];
+      if (S.game !== g || g.phase !== 'move' || g.turn !== turn) break;
+      await board.animateMove(turn, step.from, step.to, step.hit);
+      let m; try { m = BG.move(g, step.from, step.to, step.die); } catch (e) { break; }
+      beep(m.hit ? 'hit' : 'click'); if (m.hit) buzz(30);
+      netSend({ t: 'action', a: 'move', from: step.from, to: step.to, die: m.die });
+      render();
+      if (g.phase === 'over') break;
+      if (i < chain.length - 1) await sleep(speedMs(120));
+    }
+    S.busy = false;
+    afterMove();
   }
   function afterMove() {
     const g = S.game;

@@ -45,7 +45,9 @@ auto-finish when no moves remain · resume an interrupted bot/local game.
 ## Controls
 
 Tap a checker (or the bar) to see its legal destinations, then tap one — or drag the checker. Tap a
-highlighted destination directly when only one checker can reach it. Tap the selected checker again to
+highlighted destination directly when only one checker can reach it. Dashed highlights are multi-step
+destinations: tap or drag there and the checker plays the whole roll (both dice, or several of a
+double) in one go, hopping visibly through each point. Tap the selected checker again to
 play its only move. Roll / Double / Undo / Done buttons sit under the board. Keyboard on desktop:
 `R`/space roll or done, `U` undo, `D` double.
 

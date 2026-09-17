@@ -151,4 +151,20 @@ t('serialize/deserialize roundtrip keeps play working', () => {
   assert.ok(BG.legalNextMoves(g2).length > 0);
 });
 
+t('chainMoves: one checker can travel the full roll in one action', () => {
+  const g = BG.newGame(BG.newMatch()); g.phase = 'roll'; g.turn = 'W';
+  let i = 0; BG.roll(g, () => [3, 4][i++] / 6 - 0.01);           // 3-4
+  const c = BG.chainMoves(g, 12);
+  assert.deepStrictEqual(Object.keys(c), ['5']);                   // 13/10/6 or 13/9/6 -> point index 5
+  assert.strictEqual(c[5].length, 2);
+  for (const m of c[5]) BG.move(g, m.from, m.to, m.die);           // chain is actually playable
+  assert.strictEqual(g.remaining.length, 0);
+  // doubles: 23 -> 19 -> 15 with 4-4 (11 is blocked by Black's 5 checkers)
+  const h = BG.newGame(BG.newMatch()); h.phase = 'roll'; h.turn = 'W'; BG.roll(h, () => 0.5);
+  assert.deepStrictEqual(h.dice, [4, 4]);
+  assert.deepStrictEqual(Object.keys(BG.chainMoves(h, 23)), ['15']);
+  // single-step destinations are never reported as chains
+  assert.ok(!Object.keys(BG.chainMoves(h, 23)).includes('19'));
+});
+
 console.log(passed + ' tests passed');
