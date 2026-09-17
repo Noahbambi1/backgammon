@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="css/style.css?v=16">
+<link rel="stylesheet" href="css/style.css?v=17">
 </head>
 <body>
 <div id="app">
@@ -154,6 +154,29 @@
       <label class="row"><span>Show pip counts</span><input type="checkbox" id="set-pips" checked></label>
       <label class="row"><span>Bot move speed</span>
         <div class="seg small" id="set-speed"><button data-v="fast">Fast</button><button data-v="normal" class="on">Normal</button><button data-v="slow">Slow</button></div></label>
+
+      <h3 class="sub">Board</h3>
+      <div class="theme-row" id="set-board">
+        <button data-v="walnut" style="--sw-frame:#5c361c;--sw-field:#c9a56d;--sw-a:#5c3a1e;--sw-b:#f2deb0"><span class="sw"><i></i><i></i><i></i></span>Walnut</button>
+        <button data-v="felt" style="--sw-frame:#6e3520;--sw-field:#356b41;--sw-a:#e1c496;--sw-b:#783a22"><span class="sw"><i></i><i></i><i></i></span>Club felt</button>
+        <button data-v="mahogany" style="--sw-frame:#4a1e13;--sw-field:#b8683f;--sw-a:#3c160c;--sw-b:#f5dcb9"><span class="sw"><i></i><i></i><i></i></span>Mahogany</button>
+        <button data-v="ebony" style="--sw-frame:#1f1b18;--sw-field:#1e1e22;--sw-a:#d4aa5a;--sw-b:#6a727c"><span class="sw"><i></i><i></i><i></i></span>Midnight</button>
+        <button data-v="navy" style="--sw-frame:#3a2a1e;--sw-field:#24365a;--sw-a:#e2c496;--sw-b:#966e46"><span class="sw"><i></i><i></i><i></i></span>Navy club</button>
+      </div>
+      <h3 class="sub">Checkers</h3>
+      <div class="theme-row" id="set-chips">
+        <button data-v="marble"><span class="chips"><b style="background:radial-gradient(circle at 35% 30%,#fff,#e2d8c4 65%,#c9bda6)"></b><b style="background:radial-gradient(circle at 35% 30%,#6a6f6d,#22262a 65%,#0e1113)"></b></span>Marble</button>
+        <button data-v="ivory"><span class="chips"><b style="background:radial-gradient(circle at 40% 35%,#fff,#e6dccb 70%,#c8b9a0)"></b><b style="background:radial-gradient(circle at 40% 35%,#5a4b42,#2b2420 70%,#17120f)"></b></span>Ivory</button>
+        <button data-v="wood"><span class="chips"><b style="background:radial-gradient(circle at 40% 35%,#f0d8a8,#cfa86a 70%,#b48c50)"></b><b style="background:radial-gradient(circle at 40% 35%,#8a5a3a,#56321a 70%,#3a2010)"></b></span>Wood</button>
+        <button data-v="glass"><span class="chips"><b style="background:radial-gradient(circle at 35% 30%,#fff,#d8283c 45%,#5c0812)"></b><b style="background:radial-gradient(circle at 35% 30%,#fff,#2857d8 45%,#0a1a5c)"></b></span>Glass</button>
+        <button data-v="metal"><span class="chips"><b style="background:conic-gradient(from 200deg,#f5dc8a,#c9a03a 30%,#fbe8a8 55%,#b88b2a 80%,#f5dc8a)"></b><b style="background:conic-gradient(from 200deg,#e8ecf0,#8f979f 30%,#f4f6f8 55%,#7b838b 80%,#e8ecf0)"></b></span>Metal</button>
+      </div>
+      <div class="theme-preview" id="theme-preview">
+        <span class="pt top" style="left:4%;background:var(--pt-a)"></span><span class="pt top" style="left:18%;background:var(--pt-b)"></span><span class="pt top" style="left:32%;background:var(--pt-a)"></span>
+        <span class="pt" style="left:54%;background:var(--pt-b)"></span><span class="pt" style="left:68%;background:var(--pt-a)"></span><span class="pt" style="left:82%;background:var(--pt-b)"></span>
+        <div class="checker W" style="left:calc(10% - 5px);top:8px"></div><div class="checker W" style="left:calc(10% - 5px);top:36px"></div>
+        <div class="checker B" style="left:calc(74% - 5px);bottom:8px"></div><div class="checker B" style="left:calc(74% - 5px);bottom:36px"></div>
+      </div>
       <div class="card rules">
         <h3>Rules implemented</h3>
         <ul>
@@ -218,15 +241,15 @@
   <div class="toast" id="toast" hidden></div>
 </div>
 
-<script>window.APP_VERSION = '16';</script>
-<script src="vendor/qrcode.min.js?v=16"></script>
-<script src="vendor/jsQR.min.js?v=16"></script>
-<script src="js/config.js?v=16"></script>
-<script src="js/mqtt-lite.js?v=16"></script>
-<script src="js/engine.js?v=16"></script>
-<script src="js/ai.js?v=16"></script>
-<script src="js/net.js?v=16"></script>
-<script src="js/ui.js?v=16"></script>
-<script src="js/app.js?v=16"></script>
+<script>window.APP_VERSION = '17';</script>
+<script src="vendor/qrcode.min.js?v=17"></script>
+<script src="vendor/jsQR.min.js?v=17"></script>
+<script src="js/config.js?v=17"></script>
+<script src="js/mqtt-lite.js?v=17"></script>
+<script src="js/engine.js?v=17"></script>
+<script src="js/ai.js?v=17"></script>
+<script src="js/net.js?v=17"></script>
+<script src="js/ui.js?v=17"></script>
+<script src="js/app.js?v=17"></script>
 </body>
 </html>

@@ -7,7 +7,7 @@
   const VERSION = 1;
 
   // ---------------- settings & persistence ----------------
-  const settings = Object.assign({ sound: true, vibrate: true, hints: false, autodone: false, pips: true, speed: 'normal', names: {}, v: 0, fullscreen: true },
+  const settings = Object.assign({ sound: true, vibrate: true, hints: false, autodone: false, pips: true, speed: 'normal', names: {}, v: 0, fullscreen: true, board: 'walnut', chips: 'marble' },
     load('bg.settings') || {});
   // v1: legal-move highlights default to off (existing installs that never touched the toggle follow the new default)
   if ((settings.v || 0) < 1) { settings.hints = false; settings.v = 1; }
@@ -91,6 +91,22 @@
     seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); beep('click');
     if (seg.id === 'set-speed') { settings.speed = b.dataset.v; saveSettings(); }
   }));
+  // ---------------- themes ----------------
+  const THEMES = { board: ['walnut', 'felt', 'mahogany', 'ebony', 'navy'], chips: ['marble', 'ivory', 'wood', 'glass', 'metal'] };
+  function applyTheme() {
+    if (!THEMES.board.includes(settings.board)) settings.board = 'walnut';
+    if (!THEMES.chips.includes(settings.chips)) settings.chips = 'marble';
+    document.documentElement.dataset.board = settings.board; document.documentElement.dataset.chips = settings.chips;
+    for (const [id, key] of [['set-board', 'board'], ['set-chips', 'chips']]) {
+      const row = document.getElementById(id); if (!row) continue;
+      row.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === settings[key]));
+    }
+  }
+  applyTheme();
+  for (const [id, key] of [['set-board', 'board'], ['set-chips', 'chips']]) {
+    const row = document.getElementById(id); if (!row) continue;
+    row.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; settings[key] = b.dataset.v; saveSettings(); applyTheme(); beep('ui'); });
+  }
   const segVal = id => { const on = document.querySelector('#' + id + ' button.on'); return on ? on.dataset.v : null; };
 
   // modal
