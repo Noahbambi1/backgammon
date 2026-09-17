@@ -198,11 +198,24 @@
   // ---------- game flow ----------
   function rollDie(rng) { return 1 + Math.floor((rng || Math.random)() * 6); }
 
+  // Opening: each player rolls one die; higher starts and plays both dice. Ties re-roll.
   function openingRoll(g, rng) {
     if (g.phase !== 'opening') throw new Error('not opening');
-    let a = rollDie(rng), b = rollDie(rng);
-    g.opening = { W: a, B: b, ties: g.opening.ties };
-    if (a === b) { g.opening.ties++; g.lastAction = { type: 'opening-tie', W: a, B: b }; return g; }
+    g.opening.W = 0; g.opening.B = 0;
+    openingRollFor(g, W, rng); openingRollFor(g, B, rng);
+    return g;
+  }
+  function openingRollFor(g, side, rng) {
+    if (g.phase !== 'opening') throw new Error('not opening');
+    if (g.opening[side]) return g; // already rolled
+    g.opening[side] = rollDie(rng);
+    g.lastAction = { type: 'opening-die', player: side, die: g.opening[side] };
+    if (g.opening.W && g.opening.B) resolveOpening(g);
+    return g;
+  }
+  function resolveOpening(g) {
+    const a = g.opening.W, b = g.opening.B;
+    if (a === b) { g.opening = { W: 0, B: 0, ties: g.opening.ties + 1 }; g.lastAction = { type: 'opening-tie', W: a, B: b }; return g; }
     g.turn = a > b ? W : B;
     g.dice = [a, b];
     startMovePhase(g);
@@ -413,7 +426,7 @@
   function describeMove(p, m) { return pointLabel(p, m.from) + '/' + pointLabel(p, m.to) + (m.hit ? '*' : ''); }
 
   return {
-    W, B, other, sign, newMatch, newGame, openingRoll, roll, move, playMoves, undo, endTurn,
+    W, B, other, sign, newMatch, newGame, openingRoll, openingRollFor, roll, move, playMoves, undo, endTurn,
     legalNextMoves, legalPlays, uniquePlays, consistentPlays, canEndTurn, isTurnComplete, chainMoves,
     canDouble, offerDouble, acceptDouble, declineDouble, resign, recordResult,
     pipCount, allHome, countAt, cloneBoard, applyMove, singleMoves, boardKey,

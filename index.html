@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=8">
 </head>
 <body>
 <div id="app">
@@ -120,7 +120,7 @@
       <p id="pair-instr" class="hint"></p>
       <div id="pair-qr" class="qr"></div>
       <div id="pair-code-wrap" hidden>
-        <div class="paircode-label">My code — <span id="pair-code-len"></span> characters, no internet needed</div>
+        <div class="paircode-label"><b id="pair-code-label">My code</b> · <span id="pair-code-len"></span> characters · no internet needed</div>
         <div id="pair-code" class="paircode" title="Tap to copy"></div>
         <div class="two">
           <button class="btn" id="pair-copy-btn">📋 Copy</button>
@@ -144,6 +144,7 @@
       <label class="row"><span>Sound effects</span><input type="checkbox" id="set-sound" checked></label>
       <label class="row"><span>Vibration</span><input type="checkbox" id="set-vibrate" checked></label>
       <label class="row"><span>Highlight legal moves</span><input type="checkbox" id="set-hints"></label>
+      <label class="row"><span>Fullscreen during games (hides browser bar; not on iPhone Safari — add to Home Screen instead)</span><input type="checkbox" id="set-fullscreen" checked></label>
       <label class="row"><span>Auto-finish turn when no moves left</span><input type="checkbox" id="set-autodone"></label>
       <label class="row"><span>Show pip counts</span><input type="checkbox" id="set-pips" checked></label>
       <label class="row"><span>Bot move speed</span>
@@ -164,16 +165,6 @@
 
   <!-- ===== GAME ===== -->
   <section class="screen" id="screen-game">
-    <header class="gamebar">
-      <button class="btn icon" id="game-menu">☰</button>
-      <div class="scoreboard" id="scoreboard">
-        <div class="sb-player" id="sb-top"><span class="sb-dot"></span><span class="sb-name"></span><span class="sb-pips"></span><span class="sb-score"></span></div>
-        <div class="sb-mid" id="sb-mid">to 5</div>
-        <div class="sb-player" id="sb-bottom"><span class="sb-dot"></span><span class="sb-name"></span><span class="sb-pips"></span><span class="sb-score"></span></div>
-      </div>
-      <div class="cube" id="cube" title="Doubling cube">64</div>
-    </header>
-
     <div class="board-wrap">
       <div class="board" id="board">
         <div class="board-bg"></div>
@@ -183,6 +174,17 @@
         <div class="banner" id="banner"></div>
       </div>
     </div>
+
+    <div class="side">
+    <header class="gamebar">
+      <button class="btn icon" id="game-menu">☰</button>
+      <div class="scoreboard" id="scoreboard">
+        <div class="sb-player" id="sb-top"><span class="sb-dot"></span><span class="sb-name"></span><span class="sb-pips"></span><span class="sb-score"></span></div>
+        <div class="sb-mid" id="sb-mid">to 5</div>
+        <div class="sb-player" id="sb-bottom"><span class="sb-dot"></span><span class="sb-name"></span><span class="sb-pips"></span><span class="sb-score"></span></div>
+      </div>
+      <div class="cube" id="cube" title="Doubling cube">64</div>
+    </header>
 
     <footer class="controls">
       <div class="status" id="status">—</div>
@@ -194,6 +196,7 @@
         <button class="btn primary" id="btn-done" hidden>Done</button>
       </div>
     </footer>
+    </div>
     <div class="conn" id="conn" hidden></div>
   </section>
 
@@ -208,13 +211,15 @@
   <div class="toast" id="toast" hidden></div>
 </div>
 
-<script src="vendor/peerjs.min.js"></script>
-<script src="vendor/qrcode.min.js"></script>
-<script src="vendor/jsQR.min.js"></script>
-<script src="js/engine.js"></script>
-<script src="js/ai.js"></script>
-<script src="js/net.js"></script>
-<script src="js/ui.js"></script>
-<script src="js/app.js"></script>
+<script>window.APP_VERSION = '8';</script>
+<script src="vendor/peerjs.min.js?v=8"></script>
+<script src="vendor/qrcode.min.js?v=8"></script>
+<script src="vendor/jsQR.min.js?v=8"></script>
+<script src="js/config.js?v=8"></script>
+<script src="js/engine.js?v=8"></script>
+<script src="js/ai.js?v=8"></script>
+<script src="js/net.js?v=8"></script>
+<script src="js/ui.js?v=8"></script>
+<script src="js/app.js?v=8"></script>
 </body>
 </html>

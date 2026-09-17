@@ -167,4 +167,19 @@ t('chainMoves: one checker can travel the full roll in one action', () => {
   assert.ok(!Object.keys(BG.chainMoves(h, 23)).includes('19'));
 });
 
+t('openingRollFor: each side rolls one die, higher starts with both dice, ties re-roll', () => {
+  const g = BG.newGame(BG.newMatch());
+  BG.openingRollFor(g, 'B', () => 0.99);            // Black rolls 6
+  assert.strictEqual(g.phase, 'opening'); assert.strictEqual(g.opening.B, 6); assert.strictEqual(g.opening.W, 0);
+  assert.strictEqual(g.lastAction.type, 'opening-die');
+  BG.openingRollFor(g, 'B', () => 0.01);            // second roll for same side is ignored
+  assert.strictEqual(g.opening.B, 6);
+  BG.openingRollFor(g, 'W', () => 0.99);            // White also 6 -> tie, both reset
+  assert.strictEqual(g.lastAction.type, 'opening-tie'); assert.strictEqual(g.opening.ties, 1);
+  assert.strictEqual(g.opening.W, 0); assert.strictEqual(g.opening.B, 0);
+  BG.openingRollFor(g, 'W', () => 0.2);             // White 2
+  BG.openingRollFor(g, 'B', () => 0.7);             // Black 5 -> Black starts with 2-5
+  assert.strictEqual(g.phase, 'move'); assert.strictEqual(g.turn, 'B'); assert.deepStrictEqual(g.dice.slice().sort(), [2, 5]);
+});
+
 console.log(passed + ' tests passed');

@@ -7,7 +7,7 @@
   const VERSION = 1;
 
   // ---------------- settings & persistence ----------------
-  const settings = Object.assign({ sound: true, vibrate: true, hints: false, autodone: false, pips: true, speed: 'normal', names: {}, v: 0 },
+  const settings = Object.assign({ sound: true, vibrate: true, hints: false, autodone: false, pips: true, speed: 'normal', names: {}, v: 0, fullscreen: true },
     load('bg.settings') || {});
   // v1: legal-move highlights default to off (existing installs that never touched the toggle follow the new default)
   if ((settings.v || 0) < 1) { settings.hints = false; settings.v = 1; }
@@ -40,7 +40,8 @@
   function show(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === 'screen-' + id));
     if (id === 'menu') { $('resume-note').hidden = !load('bg.session'); }
-    if (id === 'game') requestAnimationFrame(() => board.layout());
+    if (id === 'game') { requestAnimationFrame(() => board.layout()); if (typeof autoFullscreen === 'function') autoFullscreen(); }
+    if (id === 'menu' && typeof exitFullscreen === 'function') exitFullscreen();
   }
   document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => { beep('click'); show(b.dataset.go); }));
   document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', e => {
@@ -144,7 +145,9 @@
     // dice + buttons + status
     UI.renderDice($('dice'), g, opts && opts.rollAnim);
     const human = isLocalHuman(g.turn) && !S.busy;
-    $('btn-roll').hidden = !(g.phase === 'roll' && human);
+    const openPend = g.phase === 'opening' && !S.busy ? openingPending() : [];
+    $('btn-roll').hidden = !((g.phase === 'roll' && human) || openPend.length);
+    $('btn-roll').textContent = openPend.length ? '🎲 ' + (S.mode === 'local' ? myName(openPend[0]) + ': roll' : 'Roll for first move') : '🎲 Roll';
     $('btn-double').hidden = !(g.phase === 'roll' && human && BG.canDouble(g, g.turn));
     $('btn-undo').hidden = !(g.phase === 'move' && human && g.moves.length > 0);
     $('btn-done').hidden = !(g.phase === 'move' && human && BG.canEndTurn(g) && (BG.legalNextMoves(g).length === 0 || true));
@@ -154,7 +157,12 @@
 
   function statusText() {
     const g = S.game; const n = s => '<b>' + escapeHTML(myName(s)) + '</b>';
-    if (g.phase === 'opening') return 'Rolling for first move…';
+    if (g.phase === 'opening') {
+      const pend = openingPending();
+      if (pend.length) return (S.mode === 'local' ? n(pend[0]) + ' — ' : '') + 'roll for first move';
+      const waiting = [W, B].filter(s => !g.opening[s]);
+      return waiting.length ? 'Waiting for ' + waiting.map(n).join(' and ') + ' to roll…' : 'Higher die starts…';
+    }
     if (g.phase === 'over') return g.winner ? n(g.winner) + ' wins the game' : 'Game over';
     const ctl = controller(g.turn);
     if (g.phase === 'roll') return ctl === 'human' ? n(g.turn) + ' — roll the dice' : ctl === 'bot' ? n(g.turn) + ' is thinking…' : 'Waiting for ' + n(g.turn) + ' to roll…';
@@ -259,6 +267,7 @@
   $('btn-done').addEventListener('click', () => { if (S && !S.busy && isLocalHuman(S.game.turn)) { beep('click'); doEndTurn(); } });
   $('btn-undo').addEventListener('click', () => { if (S && !S.busy && S.game.phase === 'move' && isLocalHuman(S.game.turn)) { if (BG.undo(S.game)) { beep('click'); S.selected = null; netSend({ t: 'action', a: 'undo' }); render(); persist(); } } });
   $('btn-roll').addEventListener('click', () => {
+    if (S && !S.busy && S.game.phase === 'opening') { humanOpeningRoll(); return; }
     if (!S || S.busy || S.game.phase !== 'roll' || !isLocalHuman(S.game.turn)) return;
     if (isAuthority()) doRoll(); else { netSend({ t: 'action', a: 'roll' }); S.busy = true; render(); }
   });
@@ -284,7 +293,11 @@
     render();
     persist();
     if (g.phase === 'over') { onGameOver(); return; }
-    if (g.phase === 'opening') { if (isAuthority()) await doOpening(token); return; }
+    if (g.phase === 'opening') {
+      // each player rolls one die: humans tap the button, bots roll by themselves, remote players send an action
+      if (isAuthority()) for (const side of [W, B]) if (!g.opening[side] && controller(side) === 'bot') { botOpeningRoll(side, token); break; }
+      return;
+    }
     const ctl = controller(g.turn);
     if (g.phase === 'roll') {
       if (S.mode === 'local' || (S.mode !== 'bot' && ctl === 'human')) announceTurn();
@@ -318,19 +331,36 @@
     }
   }
 
-  async function doOpening(token) {
-    const g = S.game; S.busy = true; render();
-    await sleep(speedMs(500));
-    if (tickToken !== token) return;
-    while (g.phase === 'opening') {
-      BG.openingRoll(g, rng); beep('dice');
-      $('dice').innerHTML = UI.openingDiceHTML(g.opening.W, g.opening.B);
-      if (g.phase === 'opening') { board.flashBanner('Tie! Rolling again…', `${g.opening.W} – ${g.opening.B}`, 1000); broadcastState(); await sleep(speedMs(1100)); }
-      else { board.flashBanner(escapeHTML(myName(g.turn)) + ' starts', `${myName(W)} rolled ${g.opening.W}, ${myName(B)} rolled ${g.opening.B}`, 1600); broadcastState(); await sleep(speedMs(1400)); }
-      if (tickToken !== token) return;
-    }
-    S.busy = false; lastAnnounced = null;
-    tick();
+  // sides that a local human still has to roll for in the opening
+  function openingPending() {
+    const g = S.game; if (g.phase !== 'opening') return [];
+    return [W, B].filter(side => !g.opening[side] && isLocalHuman(side));
+  }
+  function humanOpeningRoll() {
+    const pend = openingPending(); if (!pend.length || S.busy) return;
+    const side = pend[0];
+    if (isAuthority()) applyOpeningRoll(side);
+    else netSend({ t: 'action', a: 'openroll' });
+  }
+  async function botOpeningRoll(side, token) {
+    await sleep(speedMs(700));
+    if (tickToken !== token || !S || S.game.phase !== 'opening' || S.game.opening[side]) return;
+    applyOpeningRoll(side);
+  }
+  // Authority only: roll one die for `side`, show it, resolve when both are in.
+  async function applyOpeningRoll(side) {
+    const g = S.game; if (g.phase !== 'opening' || g.opening[side]) return;
+    BG.openingRollFor(g, side, rng); beep('dice');
+    S.busy = true; render();
+    $('dice').innerHTML = UI.openingDiceHTML(g.opening.W || g.lastAction.W, g.opening.B || g.lastAction.B, side);
+    broadcastState();
+    const la = g.lastAction;
+    if (la.type === 'opening-die') { await sleep(speedMs(500)); S.busy = false; tick(); return; }
+    if (la.type === 'opening-tie') { board.flashBanner('Tie! Roll again', `${la.W} – ${la.B}`, 1200); await sleep(speedMs(1200)); if (S.game === g) { S.busy = false; tick(); } return; }
+    board.flashBanner(escapeHTML(myName(g.turn)) + ' starts', `${myName(W)} rolled ${la.W}, ${myName(B)} rolled ${la.B}`, 1600);
+    await sleep(speedMs(1400));
+    if (S.game !== g) return;
+    S.busy = false; lastAnnounced = null; tick();
   }
 
   // ---------------- bot ----------------
@@ -389,6 +419,45 @@
   }
 
   // ---------------- game over ----------------
+
+  // ---------------- royal taunts ----------------
+  const TAUNTS = {
+    natasha: [
+      "You're playing in my kingdom now. 👑",
+      "Bow before the queen of the board.",
+      "My kingdom, my dice, my rules.",
+      "Another loyal subject added to the realm.",
+      "The crown stays exactly where it belongs.",
+      "Did you really think you could take the throne?",
+      "Checkers off, crown on. Long live the queen.",
+      "That wasn't a game — that was a coronation.",
+      "Kneel. It's less embarrassing than what just happened.",
+      "Every point on this board answers to me.",
+      "The queen has spoken. The board agrees.",
+      "Welcome to Natasha's kingdom. Population: you, defeated.",
+    ],
+    noah: [
+      "This may be your kingdom, but it's me who truly rules.",
+      "A kingdom is only as strong as its king. Bow.",
+      "Queens wear the crown. Kings win the games.",
+      "Your kingdom just got a new landlord.",
+      "The throne was never yours — I was just letting you sit in it.",
+      "Rebellion successful. The crown changes hands.",
+      "You can keep the castle. I'll take the victory.",
+      "History remembers who ruled, not who reigned.",
+      "Kingdom? I prefer to call it my back garden.",
+      "Turns out the king still outranks the queen on this board.",
+      "Long live the king — and it's not even close.",
+      "Your reign was lovely. My checkmate was lovelier.",
+    ],
+  };
+  // Deterministic pick (same phrase on both phones): walks the list based on how many games were played.
+  function tauntFor(name, seed) {
+    const key = String(name || '').trim().toLowerCase();
+    const list = TAUNTS[key]; if (!list) return null;
+    return list[Math.abs(seed | 0) % list.length];
+  }
+
   function onGameOver() {
     if (S.gameOverShown) return;
     const g = S.game, m = S.match;
@@ -403,6 +472,8 @@
     let body = `${typeTxt}<b>${escapeHTML(myName(g.winner))}</b> wins <b>${g.result.points}</b> point${g.result.points > 1 ? 's' : ''}${reason}.<br><br>` +
       `Score: <b>${escapeHTML(myName(W))} ${m.scores.W}</b> – <b>${m.scores.B} ${escapeHTML(myName(B))}</b>` + (m.target ? ` (match to ${m.target})` : '');
     const buttons = [];
+    const taunt = tauntFor(myName(r.matchOver ? r.matchWinner : g.winner), m.gameNo * 7 + m.scores.W * 3 + m.scores.B + (r.matchOver ? 5 : 0));
+    if (taunt) { body = `<div class="taunt">“${escapeHTML(taunt)}”<small>— ${escapeHTML(myName(r.matchOver ? r.matchWinner : g.winner))}</small></div>` + body; board.flashBanner(escapeHTML(taunt), escapeHTML(myName(g.winner)), 2400); }
     if (r.matchOver) {
       body = `🏆 <b>${escapeHTML(myName(r.matchWinner))}</b> wins the match ${m.scores.W}–${m.scores.B}!<br><br>` + body;
       buttons.push({ label: 'Rematch', cls: 'primary', cb: () => startNextGame(true) });
@@ -420,12 +491,26 @@
     tick();
   }
 
+  // ---------------- fullscreen (hides the browser's URL bar) ----------------
+  function fsSupported() { const d = document.documentElement; return !!(d.requestFullscreen || d.webkitRequestFullscreen); }
+  function enterFullscreen() {
+    const d = document.documentElement; const req = d.requestFullscreen || d.webkitRequestFullscreen; if (!req) return;
+    try { const r = req.call(d, { navigationUI: 'hide' }); if (r && r.catch) r.catch(() => {}); } catch (_) {}
+  }
+  function exitFullscreen() { const ex = document.exitFullscreen || document.webkitExitFullscreen; if (ex && (document.fullscreenElement || document.webkitFullscreenElement)) try { ex.call(document); } catch (_) {} }
+  function toggleFullscreen() { if (document.fullscreenElement || document.webkitFullscreenElement) exitFullscreen(); else enterFullscreen(); }
+  // On phones, go fullscreen when a game starts (this runs inside the Start button's tap, which browsers
+  // require). iOS Safari has no fullscreen API for pages — install to the home screen there instead.
+  const isTouchPhone = matchMedia('(pointer: coarse)').matches && !matchMedia('(display-mode: standalone)').matches;
+  function autoFullscreen() { if (settings.fullscreen !== false && isTouchPhone) enterFullscreen(); }
+
   // ---------------- game menu ----------------
   $('game-menu').addEventListener('click', () => {
     if (!S) return; beep('click');
     const m = S.match;
     const hist = m.history.length ? '<div class="history">' + m.history.map(h => `<div><span>Game ${h.game}</span><span>${escapeHTML(myName(h.winner))} +${h.points}${h.type !== 'single' ? ' (' + h.type + ')' : ''}</span></div>`).join('') + '</div>' : '<p>No games finished yet.</p>';
     const buttons = [];
+    if (fsSupported()) buttons.push({ label: document.fullscreenElement ? 'Exit fullscreen' : '⛶ Fullscreen (hide browser bar)', cb: toggleFullscreen });
     const canResign = S.game.phase !== 'over' && S.game.phase !== 'opening' && (isLocalHuman(W) || isLocalHuman(B));
     if (canResign) buttons.push({ label: 'Resign this game', cls: 'danger', cb: confirmResign });
     buttons.push({ label: 'Leave game', cls: 'danger', cb: () => showModal('Leave game?', S.net ? 'Your opponent will be disconnected.' : 'You can resume a bot or local game later from the menu.', [{ label: 'Leave', cls: 'danger', cb: leaveToMenu }, { label: 'Stay' }]) });
@@ -559,6 +644,7 @@
     try {
       switch (msg.a) {
         case 'roll': if (g.phase === 'roll' && g.turn === guest) { tickToken++; doRoll(); return; } break;
+        case 'openroll': if (g.phase === 'opening' && !g.opening[guest]) { applyOpeningRoll(guest); return; } break;
         case 'move': if (g.phase === 'move' && g.turn === guest) { const m = BG.move(g, msg.from, msg.to, msg.die); board.animateMove(guest, m.from, m.to, m.hit).then(() => { render(); beep(m.hit ? 'hit' : 'click'); if (g.phase === 'over') tick(); }); } break;
         case 'undo': if (g.phase === 'move' && g.turn === guest) BG.undo(g); break;
         case 'end': if (g.phase === 'move' && g.turn === guest && BG.canEndTurn(g)) { BG.endTurn(g); lastAnnounced = null; broadcastState(); tick(); return; } break;
@@ -588,8 +674,9 @@
     }
     if (la && la.type === 'roll' && la.player === remote) beep('dice');
     if (la && la.type === 'roll' && la.player === S.mySide) { beep('dice'); S.game = g; render({ rollAnim: true }); setTimeout(tick, 100); return; }
-    if (la && la.type === 'opening' && prev.phase === 'opening') { $('dice').innerHTML = UI.openingDiceHTML(g.opening.W, g.opening.B); board.flashBanner(escapeHTML(g.turn === S.mySide ? 'You start' : myName(g.turn) + ' starts'), `${g.opening.W} – ${g.opening.B}`, 1600); }
-    if (la && la.type === 'opening-tie') { $('dice').innerHTML = UI.openingDiceHTML(la.W, la.B); board.flashBanner('Tie! Rolling again…', `${la.W} – ${la.B}`, 1000); }
+    if (la && la.type === 'opening-die') { beep('dice'); S.game = g; render(); $('dice').innerHTML = UI.openingDiceHTML(g.opening.W, g.opening.B, la.player); return; }
+    if (la && la.type === 'opening' && prev && prev.phase === 'opening') { beep('dice'); S.game = g; render(); $('dice').innerHTML = UI.openingDiceHTML(la.W, la.B, la.first); board.flashBanner(escapeHTML(g.turn === S.mySide ? 'You start' : myName(g.turn) + ' starts'), `${la.W} – ${la.B}`, 1600); S.busy = true; setTimeout(() => { if (S && S.game === g) { S.busy = false; tick(); } }, speedMs(1400)); return; }
+    if (la && la.type === 'opening-tie') { beep('dice'); S.game = g; render(); $('dice').innerHTML = UI.openingDiceHTML(la.W, la.B); board.flashBanner('Tie! Roll again', `${la.W} – ${la.B}`, 1200); return; }
     if (la && la.type === 'double' && la.player === remote) beep('alert');
     if (la && la.type === 'take' && la.player === remote) board.flashBanner(escapeHTML(myName(remote)) + ' takes', 'Cube is now ' + g.cube.value, 1300);
     if (la && la.type === 'endturn') lastAnnounced = null;
@@ -605,7 +692,10 @@
     const me = nameOr($('online-name').value, 'Host'); settings.names.me = me; saveSettings();
     const net = new Net.PeerTransport(); pendingNet = net;
     show('wait'); $('wait-code').textContent = '······'; $('wait-status').textContent = 'Connecting to matchmaking service…'; $('wait-qr').innerHTML = '';
-    net.onstatus = s => { if (s === 'waiting') $('wait-status').textContent = 'Share this code. Waiting for your opponent to join…'; if (s === 'connected') $('wait-status').textContent = 'Opponent connected!'; };
+    net.onstatus = s => {
+      if (s === 'waiting') $('wait-status').innerHTML = 'Share this code. Waiting for your opponent to join…' + (net.hasTurn ? '' : '<br><small>⚠ No relay (TURN) server configured — two phones on mobile data may fail to connect. See js/config.js.</small>');
+      if (s === 'connected') $('wait-status').textContent = 'Opponent connected!';
+    };
     try {
       const code = await net.host();
       $('wait-code').textContent = code;
@@ -624,7 +714,14 @@
     if (code.length < 4) { toast('Enter the 6-character room code'); return; }
     const me = nameOr($('online-name').value, 'Guest'); settings.names.me = me; saveSettings();
     const net = new Net.PeerTransport(); pendingNet = net;
-    show('wait'); $('wait-code').textContent = code; $('wait-qr').innerHTML = ''; $('wait-status').textContent = 'Connecting to room…'; $('wait-share').onclick = null;
+    show('wait'); $('wait-code').textContent = code; $('wait-qr').innerHTML = ''; $('wait-status').textContent = 'Contacting matchmaking server…'; $('wait-share').onclick = null;
+    net.onstatus = s => {
+      const el = $('wait-status');
+      if (s === 'negotiating') el.textContent = 'Found the server — looking for the room…';
+      else if (s === 'ice:checking') el.textContent = 'Room found! Connecting the two phones… (can take up to 30 s)';
+      else if (s === 'ice:connected' || s === 'ice:completed') el.textContent = 'Connected! Starting…';
+      else if (s === 'ice:failed') el.textContent = 'Direct connection failed…';
+    };
     try {
       S = { mode: 'online', net, isHost: false, busy: false, selected: null, players: { W: { name: '…', type: 'remote' }, B: { name: me, type: 'human' } }, match: BG.newMatch(), game: null, mySide: B, gameOverShown: false };
       S.game = BG.newGame(S.match);
@@ -642,12 +739,32 @@
   // ---------------- nearby (manual WebRTC over hotspot) ----------------
   let rtc = null, scanner = null, pairRole = null;
   function showQR(el, text) { el.innerHTML = ''; try { new QRCode(el, { text: text.replace(/-/g, ''), width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M }); } catch (e) { el.textContent = ''; } }
-  function showMyCode(code) {
+  function showMyCode(code, label) {
     S.myCode = code;
     showQR($('pair-qr'), code);
     const plain = code.replace(/-/g, '');
     $('pair-code').textContent = code; $('pair-code-len').textContent = plain.length;
+    $('pair-code-label').textContent = label || 'My code';
     $('pair-code-wrap').hidden = false;
+  }
+  // Watch the WebRTC connection while pairing and explain what is happening / what went wrong.
+  function watchPairing() {
+    const pc = rtc && rtc.pc; if (!pc) return;
+    const el = $('pair-status');
+    const started = Date.now();
+    const upd = () => {
+      if (!rtc || rtc.pc !== pc) return;
+      const st = pc.iceConnectionState;
+      if (st === 'checking') el.textContent = '🔄 Codes exchanged — connecting the two phones… (usually a few seconds)';
+      else if (st === 'connected' || st === 'completed') el.textContent = 'Connected!';
+      else if (st === 'failed' || (st === 'disconnected' && Date.now() - started > 8000)) {
+        el.innerHTML = '⚠ The phones could not reach each other. Check that <b>both are on the same Wi-Fi / hotspot</b> (the phone that is NOT hosting the hotspot must be joined to it), then go back and pair again. If it keeps failing, both phones should grant camera permission — that lets the browser share its real Wi-Fi address.';
+        beep('alert');
+      }
+    };
+    pc.addEventListener('iceconnectionstatechange', upd); upd();
+    // if nothing happens for 25 s after both codes are in, say so
+    setTimeout(() => { if (rtc && rtc.pc === pc && !rtc.connected && ['new', 'checking'].includes(pc.iceConnectionState)) el.innerHTML = '⚠ Still connecting… Make sure both phones are on the <b>same</b> hotspot / Wi-Fi and that neither has a VPN on. You can go back and try again.'; }, 25000);
   }
   function copyText(text, msg) {
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => toast(msg || 'Copied')).catch(() => fallbackCopy(text, msg));
@@ -667,19 +784,19 @@
   function resetPairScreen(title, instr) {
     $('pair-title').textContent = title; $('pair-instr').innerHTML = instr; $('pair-status').textContent = '';
     $('pair-qr').innerHTML = ''; $('pair-code-wrap').hidden = true; $('pair-code').textContent = ''; $('pair-scan').hidden = true;
-    $('pair-paste').value = ''; $('pair-paste-details').open = false;
+    $('pair-paste').value = ''; $('pair-paste-details').open = false; $('pair-paste-details').hidden = false; $('pair-scan-btn').hidden = false;
   }
   $('nearby-host').addEventListener('click', async () => {
     const me = nameOr($('nearby-name').value, 'Host'); settings.names.me = me; saveSettings();
     pairRole = 'host'; rtc = new Net.LocalRTC(); show('pair');
-    resetPairScreen('Host · Step 1', 'Both phones on the same Wi-Fi / hotspot (no internet needed).<br>1️⃣ Give the other phone <b>your code</b> — let them scan the QR, or Copy/Share it, or read it out.<br>2️⃣ They get a <b>reply code</b>: scan it or type it below.');
+    resetPairScreen('Host · Step 1 of 2', 'Both phones on the same Wi-Fi / hotspot (no internet needed).<br>1️⃣ Give the other phone this <b>HOST CODE</b> — let them scan the QR, or Copy/Share it, or read it out.<br>2️⃣ Their phone then shows a <b>REPLY CODE</b>: scan it or type it below.');
     $('pair-status').textContent = 'Preparing your code…';
     await ensureCamera(); // permission also unlocks real local IP candidates (shorter code, more reliable)
     try {
       S = { mode: 'nearby', net: rtc, isHost: true, pending: { myName: me, target: +segVal('nearby-target'), cube: $('nearby-cube').checked }, busy: false, selected: null, players: { W: { name: me, type: 'human' }, B: { name: '…', type: 'remote' } }, match: BG.newMatch({ nameW: me }), game: null, mySide: W, gameOverShown: false };
       S.game = BG.newGame(S.match);
       const offer = await rtc.createOffer();
-      showMyCode(offer);
+      showMyCode(offer, 'HOST CODE');
       $('pair-status').textContent = 'Waiting for the other phone\'s reply code…';
       rtc.onopen = () => { $('pair-status').textContent = 'Connected!'; stopScan(); attachNet(rtc, true); };
       rtc.onclose = r => $('pair-status').textContent = '⚠ ' + r;
@@ -688,7 +805,7 @@
   $('nearby-join').addEventListener('click', async () => {
     const me = nameOr($('nearby-name').value, 'Guest'); settings.names.me = me; saveSettings();
     pairRole = 'join'; rtc = new Net.LocalRTC(); show('pair');
-    resetPairScreen('Join · Step 2', '1️⃣ Enter the <b>host\'s code</b>: scan their QR, or type/paste it below.<br>2️⃣ Your <b>reply code</b> appears — give it to the host the same way.');
+    resetPairScreen('Join · Step 1 of 2', '1️⃣ Enter the <b>HOST CODE</b> from the other phone: scan their QR, or type/paste it below.<br>2️⃣ Your <b>REPLY CODE</b> will appear — give it back to the host the same way.');
     S = { mode: 'nearby', net: rtc, isHost: false, busy: false, selected: null, players: { W: { name: '…', type: 'remote' }, B: { name: me, type: 'human' } }, match: BG.newMatch(), game: null, mySide: B, gameOverShown: false, myName: me };
     S.game = BG.newGame(S.match);
     $('pair-paste-details').open = true;
@@ -700,16 +817,23 @@
     if (!text) return;
     try {
       if (pairRole === 'host') {
-        $('pair-status').textContent = 'Connecting…';
+        $('pair-status').textContent = 'Reply code accepted — connecting…';
+        $('pair-paste-details').open = false; stopScan();
         await rtc.acceptAnswer(text);
+        $('pair-title').textContent = 'Host · Connecting';
+        watchPairing();
       } else {
-        $('pair-status').textContent = 'Creating your reply code…';
+        $('pair-status').textContent = 'Host code accepted — creating your reply code…';
         const answer = await rtc.createAnswer(text);
-        showMyCode(answer);
-        $('pair-paste-details').open = false;
-        $('pair-status').textContent = 'Now give this reply code to the host (scan / share / read out). Connecting…';
+        $('pair-title').textContent = 'Join · Step 2 of 2';
+        $('pair-instr').innerHTML = '✅ Host code accepted. Now give this <b>REPLY CODE</b> back to the host: they scan this QR, or you Copy/Share it, or read it out. The game starts on both phones as soon as they enter it.';
+        showMyCode(answer, 'REPLY CODE');
+        $('pair-scan-btn').hidden = true;
+        $('pair-paste-details').hidden = true;
+        $('pair-status').textContent = 'Waiting for the host to enter your reply code…';
         rtc.onopen = () => { $('pair-status').textContent = 'Connected!'; attachNet(rtc, false, { myName: S.myName }); };
         rtc.onclose = r => $('pair-status').textContent = '⚠ ' + r;
+        watchPairing();
       }
     } catch (e) { $('pair-status').textContent = '⚠ ' + e.message; beep('alert'); }
   }
@@ -743,7 +867,7 @@
   $('pair-cancel').addEventListener('click', () => { stopScan(); if (rtc) rtc.close(); rtc = null; S = null; show('nearby'); });
 
   // ---------------- settings ----------------
-  for (const [id, key] of [['set-sound', 'sound'], ['set-vibrate', 'vibrate'], ['set-hints', 'hints'], ['set-autodone', 'autodone'], ['set-pips', 'pips']]) {
+  for (const [id, key] of [['set-sound', 'sound'], ['set-vibrate', 'vibrate'], ['set-hints', 'hints'], ['set-autodone', 'autodone'], ['set-pips', 'pips'], ['set-fullscreen', 'fullscreen']]) {
     $(id).checked = !!settings[key];
     $(id).addEventListener('change', () => { settings[key] = $(id).checked; saveSettings(); if (S) render(); });
   }
@@ -769,7 +893,34 @@
   document.addEventListener('pointerdown', () => { if (settings.sound && !actx) beep('none'); }, { once: true });
 
   // PWA
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !params.has('nosw')) navigator.serviceWorker.register('sw.js').catch(() => {});
+  // ---------------- updates / cache busting ----------------
+  // Assets carry ?v=N (see index.html) and the service worker revalidates with the server, so a new
+  // deploy is picked up on the next load. On top of that we poll version.json: when a newer version is
+  // live we reload automatically while on the menu, or offer a one-tap update during a game.
+  let swReg = null, updateOffered = false;
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !params.has('nosw')) {
+    navigator.serviceWorker.register('sw.js').then(r => { swReg = r; }).catch(() => {});
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (reloading) return; reloading = true; if (!S) location.reload(); });
+  }
+  async function applyUpdateCheck() {
+    try {
+      const res = await fetch('version.json?_=' + Date.now(), { cache: 'no-store' });
+      if (!res.ok) return;
+      const { v } = await res.json();
+      if (!v || v === window.APP_VERSION) return;
+      if (swReg) swReg.update().catch(() => {});
+      const onMenu = !S && document.querySelector('.screen.active').id === 'screen-menu';
+      if (onMenu) { location.reload(); return; }
+      if (updateOffered) return; updateOffered = true;
+      const t = $('toast'); t.innerHTML = '🆕 New version available — <b>tap to update</b>'; t.hidden = false; t.style.cursor = 'pointer';
+      t.onclick = () => { t.hidden = true; location.reload(); };
+      clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; t.onclick = null; t.style.cursor = ''; }, 8000);
+    } catch (_) {}
+  }
+  setTimeout(applyUpdateCheck, 3000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) applyUpdateCheck(); });
+  setInterval(applyUpdateCheck, 15 * 60 * 1000);
 
   // expose for debugging/testing
   window.BGApp = { get session() { return S; }, tick, render, tryMove, doEndTurn, newSession, show, settings };

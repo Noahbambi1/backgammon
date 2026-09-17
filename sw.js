@@ -1,7 +1,8 @@
 // Service worker: network-first with an offline cache, so the app installs as a PWA and keeps
 // working with no internet (in-flight "Nearby" mode). Bump CACHE when shipping a new version.
-const CACHE = 'backgammon-v6';
-const ASSETS = ['./', './index.html', './css/style.css', './js/engine.js', './js/ai.js', './js/net.js', './js/ui.js', './js/app.js',
+const VERSION = '8'; // bumped by `node bump.js`
+const CACHE = 'backgammon-v' + VERSION;
+const ASSETS = ['./', './index.html', './css/style.css', './js/config.js', './js/engine.js', './js/ai.js', './js/net.js', './js/ui.js', './js/app.js',
   './vendor/peerjs.min.js', './vendor/qrcode.min.js', './vendor/jsQR.min.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', e => {

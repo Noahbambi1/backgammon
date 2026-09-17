@@ -10,6 +10,27 @@
   const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   function makeCode(n) { let s = ''; const r = crypto.getRandomValues(new Uint8Array(n || 6)); for (const b of r) s += ALPHABET[b % ALPHABET.length]; return s; }
 
+  // ---------------- ICE servers (STUN/TURN) ----------------
+  // Phones on mobile data sit behind carrier NATs that usually need a TURN relay. PeerJS's bundled
+  // relay hosts no longer resolve, so we bring our own list (js/config.js) and can fetch fresh
+  // credentials from a provider URL (Metered's free tier) at connect time.
+  const CFG = root.BG_CONFIG || {};
+  const FALLBACK_ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
+  let iceCache = null, iceCacheAt = 0;
+  async function getIceServers() {
+    const staticList = Array.isArray(CFG.iceServers) && CFG.iceServers.length ? CFG.iceServers : FALLBACK_ICE;
+    if (!CFG.turnCredentialsUrl) return staticList;
+    if (iceCache && Date.now() - iceCacheAt < 10 * 60 * 1000) return iceCache;
+    try {
+      const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 5000);
+      const res = await fetch(CFG.turnCredentialsUrl, { signal: ctl.signal, cache: 'no-store' }); clearTimeout(t);
+      const list = await res.json();
+      if (Array.isArray(list) && list.length) { iceCache = list; iceCacheAt = Date.now(); return list; }
+    } catch (e) { console.warn('TURN credentials fetch failed, using static list', e); }
+    return staticList;
+  }
+  function hasTurn(list) { return list.some(s => [].concat(s.urls).some(u => /^turns?:/.test(u))); }
+
   // ---------------- PeerJS (online) ----------------
   class PeerTransport {
     constructor() { this.peer = null; this.conn = null; this.onopen = null; this.onmessage = null; this.onclose = null; this.onstatus = null; this.closed = false; }
@@ -35,12 +56,13 @@
       peer.on('disconnected', () => { if (!this.closed) { this._status('reconnecting'); try { peer.reconnect(); } catch (_) {} } });
     }
     host(code) {
-      return new Promise((resolve, reject) => {
+      return new Promise(async (resolve, reject) => {
         if (typeof Peer === 'undefined') return reject(new Error('Online library not loaded (are you offline?).'));
         code = code || makeCode(6);
         this.code = code;
         this._status('connecting');
-        this.peer = new Peer('bgmm-' + code, { debug: 0 });
+        const ice = await getIceServers(); this.hasTurn = hasTurn(ice);
+        this.peer = new Peer('bgmm-' + code, { debug: 0, config: { iceServers: ice, sdpSemantics: 'unified-plan' } });
         this._peerErrors(this.peer, reject);
         this.peer.on('open', () => { this._status('waiting'); resolve(code); });
         this.peer.on('connection', conn => {
@@ -50,17 +72,30 @@
       });
     }
     join(code) {
-      return new Promise((resolve, reject) => {
+      return new Promise(async (resolve, reject) => {
         if (typeof Peer === 'undefined') return reject(new Error('Online library not loaded (are you offline?).'));
         this.code = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
         this._status('connecting');
-        this.peer = new Peer({ debug: 0 });
+        const ice = await getIceServers(); this.hasTurn = hasTurn(ice);
+        this.peer = new Peer({ debug: 0, config: { iceServers: ice, sdpSemantics: 'unified-plan' } });
         this._peerErrors(this.peer, reject);
+        const serverTimer = setTimeout(() => reject(new Error('Cannot reach the matchmaking server. Check your internet connection.')), 15000);
         this.peer.on('open', () => {
+          clearTimeout(serverTimer);
+          this._status('negotiating');
           const conn = this.peer.connect('bgmm-' + this.code, { reliable: true, serialization: 'json' });
-          const timer = setTimeout(() => reject(new Error('Could not connect to the room. Is the host still waiting?')), 15000);
+          const timer = setTimeout(() => {
+            const why = this.hasTurn
+              ? 'Found the room but the two phones could not connect to each other. Make sure the host still has the room open, then try again.'
+              : 'Found the room but the two phones could not connect directly — this usually means both are on mobile data and a relay (TURN) server is not configured. Try putting one phone on Wi-Fi, or use the Nearby mode.';
+            reject(new Error(why));
+          }, 30000);
+          conn.on('error', e => { clearTimeout(timer); reject(new Error('Connection failed: ' + (e && e.message || e))); });
           this._wire(conn);
           conn.on('open', () => { clearTimeout(timer); resolve(); });
+          // surface ICE progress for the waiting screen
+          const watch = () => { const pc = conn.peerConnection; if (!pc) return setTimeout(watch, 300); pc.addEventListener('iceconnectionstatechange', () => this._status('ice:' + pc.iceConnectionState)); };
+          watch();
         });
       });
     }
@@ -293,5 +328,5 @@
     stop() { this.running = false; if (this.stream) { this.stream.getTracks().forEach(t => t.stop()); this.stream = null; } this.video.srcObject = null; }
   }
 
-  root.BGNet = { PeerTransport, LocalRTC, QRScanner, makeCode, compactSDP, expandSDP, groupCode, b32enc, b32dec };
+  root.BGNet = { PeerTransport, LocalRTC, QRScanner, makeCode, compactSDP, expandSDP, groupCode, b32enc, b32dec, getIceServers, hasTurn };
 })(window);

@@ -272,7 +272,8 @@
     return `<div class="die ${cls || ''}">${(PIPS[v] || []).map(([x, y]) => `<span class="pip" style="left:${x - 9}%;top:${y - 9}%"></span>`).join('')}</div>`;
   }
   function renderDice(el, game, animate) {
-    if (!game || game.phase === 'opening' && !(game.opening.W && game.opening.B)) { el.innerHTML = ''; return; }
+    if (!game) { el.innerHTML = ''; return; }
+    if (game.phase === 'opening') { el.innerHTML = openingDiceHTML(game.opening.W, game.opening.B); return; }
     if (game.phase === 'roll' || game.phase === 'double') { el.innerHTML = ''; return; }
     if (game.phase === 'over' && !game.dice[0]) { el.innerHTML = ''; return; }
     const [a, b] = game.dice; const p = game.turn;
@@ -285,7 +286,10 @@
     }
     el.innerHTML = html;
   }
-  function openingDiceHTML(w, b) { return dieHTML(w, 'W rolling') + dieHTML(b, 'B rolling'); }
+  function openingDiceHTML(w, b, justRolled) {
+    const one = (v, p) => v ? dieHTML(v, p + (justRolled === p ? ' rolling' : '')) : `<div class="die ${p} empty"></div>`;
+    return one(w, 'W') + one(b, 'B');
+  }
 
   root.BGUI = { BoardView, renderDice, dieHTML, openingDiceHTML };
 })(window);

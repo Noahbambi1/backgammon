@@ -15,6 +15,16 @@ caches everything so the installed app works offline. HTTPS matters: the camera 
 WebRTC only work on HTTPS or localhost. Over plain `http://<your-LAN-ip>` the app runs, but the QR
 scanner is unavailable — use the "Paste code manually" fallback in Nearby mode.
 
+## Online play needs a TURN relay (one-time setup)
+
+Two phones on mobile data sit behind carrier NATs and usually cannot connect directly; a TURN server
+relays the encrypted traffic. The free relay that PeerJS used to bundle is gone, so **configure your
+own in `js/config.js`** — the easiest is Metered's free Open Relay (20 GB/month; a whole match is a
+few KB): sign up at https://dashboard.metered.ca/signup, copy the TURN "credentials" URL from the
+dashboard (`https://<app>.metered.live/api/v1/turn/credentials?apiKey=…`) and paste it as
+`turnCredentialsUrl`. Until then the waiting screen shows a warning and phones on the same Wi-Fi /
+home networks will still connect; two phones both on mobile data probably won't.
+
 ## Modes
 
 | Mode | How it works |
@@ -35,7 +45,7 @@ Bluetooth transport would plug into `js/app.js` unchanged.
 
 ## Rules implemented
 
-Opening roll (higher die starts, ties re-roll) · must play both dice when possible, otherwise the higher
+Opening roll — each player taps to roll one die, higher starts and plays both dice, ties re-roll · must play both dice when possible, otherwise the higher
 die · doubles play four times · hitting and entering from the bar · bearing off (exact die, or a higher
 die when no checker is farther back) · doubling cube with ownership, take/pass, redoubles to 64 ·
 Crawford rule in match play · gammon ×2, backgammon ×3 · match to 1/3/5/7 or unlimited (money game) ·
@@ -51,6 +61,12 @@ double) in one go, hopping visibly through each point. Tap the selected checker 
 play its only move. Roll / Double / Undo / Done buttons sit under the board. Keyboard on desktop:
 `R`/space roll or done, `U` undo, `D` double.
 
+## Releasing a new version
+
+Run `node bump.js` before committing: it increments `version.json`, the `?v=N` on every asset in
+`index.html` and the service-worker cache name. Installed apps poll `version.json` and reload
+themselves on the menu (or show a one-tap "update" toast mid-game), so everyone gets the new build.
+
 ## Project layout
 
 ```
@@ -59,7 +75,9 @@ css/style.css         mobile-first styling
 js/engine.js          rules engine (pure, JSON-serialisable state; also runs in Node)
 js/ai.js              bot (three levels)
 js/ui.js              board rendering, tap/drag input, animations, dice
+js/config.js          deployment config: STUN/TURN servers
 js/net.js             PeerTransport (online), LocalRTC (nearby), QRScanner
+bump.js               version bump for cache busting
 js/app.js             screens, game loop, bot orchestration, host-authoritative sync
 sw.js, manifest.webmanifest, icons/   PWA
 vendor/               peerjs, qrcodejs, jsQR (vendored so the app works offline)
