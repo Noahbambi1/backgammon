@@ -119,14 +119,19 @@
     <div class="form center" id="pair-body">
       <p id="pair-instr" class="hint"></p>
       <div id="pair-qr" class="qr"></div>
-      <div id="pair-scan" class="scan" hidden><video id="pair-video" playsinline muted></video><canvas id="pair-canvas" hidden></canvas></div>
-      <div class="two">
-        <button class="btn" id="pair-scan-btn">📷 Scan their code</button>
-        <button class="btn" id="pair-copy-btn">📋 Copy my code</button>
+      <div id="pair-code-wrap" hidden>
+        <div class="paircode-label">My code — <span id="pair-code-len"></span> characters, no internet needed</div>
+        <div id="pair-code" class="paircode" title="Tap to copy"></div>
+        <div class="two">
+          <button class="btn" id="pair-copy-btn">📋 Copy</button>
+          <button class="btn" id="pair-share-btn">📤 Share…</button>
+        </div>
       </div>
-      <details class="paste"><summary>Paste code manually</summary>
-        <textarea id="pair-paste" rows="3" placeholder="Paste the other phone's code here"></textarea>
-        <button class="btn" id="pair-paste-btn">Use pasted code</button>
+      <div id="pair-scan" class="scan" hidden><video id="pair-video" playsinline muted></video><canvas id="pair-canvas" hidden></canvas></div>
+      <button class="btn" id="pair-scan-btn">📷 Scan their QR code</button>
+      <details class="paste" id="pair-paste-details"><summary>Type or paste their code</summary>
+        <textarea id="pair-paste" rows="3" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="e.g. 5G3K-Q0PW-…  dashes/spaces optional, case doesn't matter"></textarea>
+        <button class="btn primary" id="pair-paste-btn">Connect with this code</button>
       </details>
       <p class="hint" id="pair-status"></p>
     </div>
@@ -138,7 +143,7 @@
     <div class="form">
       <label class="row"><span>Sound effects</span><input type="checkbox" id="set-sound" checked></label>
       <label class="row"><span>Vibration</span><input type="checkbox" id="set-vibrate" checked></label>
-      <label class="row"><span>Highlight legal moves</span><input type="checkbox" id="set-hints" checked></label>
+      <label class="row"><span>Highlight legal moves</span><input type="checkbox" id="set-hints"></label>
       <label class="row"><span>Auto-finish turn when no moves left</span><input type="checkbox" id="set-autodone"></label>
       <label class="row"><span>Show pip counts</span><input type="checkbox" id="set-pips" checked></label>
       <label class="row"><span>Bot move speed</span>

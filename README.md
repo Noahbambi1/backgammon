@@ -22,7 +22,7 @@ scanner is unavailable — use the "Paste code manually" fallback in Nearby mode
 | **Play vs Bot** | Easy (random legal play), Medium (positional heuristics, 1-ply), Hard (2-ply expectimax over all 21 opponent rolls, equity-based cube decisions). Pick your colour, match length, cube on/off. |
 | **Two Players · Same Device** | Enter both names; the game announces whose turn it is, keeps the match score, and can rotate the board for the player on move. |
 | **Play Online · Room Code** | One player taps *Create Room* and shares the 6-letter code (or link/QR). The other taps *Join*. Peer-to-peer WebRTC via PeerJS's free public signalling server; no game data touches a server after connecting. |
-| **Nearby · No Internet** | For flights: one phone turns on Personal Hotspot, the other joins that Wi-Fi. Host shows a QR, guest scans it, guest shows a reply QR, host scans it — a direct WebRTC link on the local network, zero internet. Paste-the-code fallback if a camera isn't available. |
+| **Nearby · No Internet** | For flights: one phone turns on Personal Hotspot, the other joins that Wi-Fi. Host shows a code (QR + a short text code), guest enters it, guest shows a reply code, host enters it — a direct WebRTC link on the local network, zero internet. Codes are ~70–90 characters of typo-tolerant base32 (no I/L/O/U, case-insensitive, dashes optional, checksum), so they can be scanned, copied, shared via Quick Share/AirDrop/Bluetooth, or simply read aloud and typed. |
 
 ### Why Nearby uses hotspot + QR instead of Bluetooth
 
@@ -39,7 +39,7 @@ Opening roll (higher die starts, ties re-roll) · must play both dice when possi
 die · doubles play four times · hitting and entering from the bar · bearing off (exact die, or a higher
 die when no checker is farther back) · doubling cube with ownership, take/pass, redoubles to 64 ·
 Crawford rule in match play · gammon ×2, backgammon ×3 · match to 1/3/5/7 or unlimited (money game) ·
-undo within a turn · resign (single/gammon/backgammon) · pip counts · legal-move highlighting ·
+undo within a turn · resign (single/gammon/backgammon) · pip counts · optional legal-move highlighting (off by default, Settings) ·
 auto-finish when no moves remain · resume an interrupted bot/local game.
 
 ## Controls

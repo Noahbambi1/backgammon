@@ -70,7 +70,138 @@
   }
 
   // ---------------- Manual WebRTC (nearby / no internet) ----------------
-  function compactSDP(desc) {
+  // Pairing codes are compact binary, Crockford-base32 encoded (no I/L/O/U, case-insensitive), grouped
+  // in blocks of 4 so they can be read aloud or typed. Layout:
+  //   [0] flags: bit0 type (0 offer / 1 answer), bits1-2 setup (0 actpass,1 active,2 passive), bit3 pwd included
+  //   [1..3] ice-ufrag (4 base64 chars packed into 3 bytes)
+  //   [4..35] DTLS fingerprint sha-256 (32 bytes)
+  //   [36..] pwd (24 bytes) only if bit3 set (fallback when the browser refused our derived password)
+  //   then candidates: kind byte (0 ipv4, 1 mDNS uuid, 2 ipv6) + address (4/16/16 bytes) + port (2 bytes)
+  //   last byte: checksum (sum of all previous bytes mod 256)
+  // The ICE password is derived from ufrag+fingerprint on both sides, so it need not be sent.
+  const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+  function b32enc(bytes) {
+    let bits = 0, val = 0, out = '';
+    for (const b of bytes) { val = (val << 8) | b; bits += 8; while (bits >= 5) { out += B32[(val >>> (bits - 5)) & 31]; bits -= 5; } }
+    if (bits > 0) out += B32[(val << (5 - bits)) & 31];
+    return out;
+  }
+  function b32dec(str) {
+    const s = str.toUpperCase().replace(/[^0-9A-Z]/g, '').replace(/O/g, '0').replace(/[IL]/g, '1').replace(/U/g, 'V');
+    const out = []; let bits = 0, val = 0;
+    for (const ch of s) { const v = B32.indexOf(ch); if (v < 0) throw new Error('Invalid character in code'); val = (val << 5) | v; bits += 5; if (bits >= 8) { out.push((val >>> (bits - 8)) & 255); bits -= 8; } }
+    return new Uint8Array(out);
+  }
+  function groupCode(s) { return s.replace(/(.{4})(?=.)/g, '$1-'); }
+  const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  function packUfrag(u) { const v = [...u.slice(0, 4).padEnd(4, 'A')].map(c => Math.max(0, B64.indexOf(c))); return [(v[0] << 2) | (v[1] >> 4), ((v[1] & 15) << 4) | (v[2] >> 2), ((v[2] & 3) << 6) | v[3]]; }
+  function unpackUfrag(b) { return B64[b[0] >> 2] + B64[((b[0] & 3) << 4) | (b[1] >> 4)] + B64[((b[1] & 15) << 2) | (b[2] >> 6)] + B64[b[2] & 63]; }
+  function hexToBytes(h) { return h.replace(/[^0-9a-f]/gi, '').match(/../g).map(x => parseInt(x, 16)); }
+  function bytesToFp(b) { return Array.from(b, x => x.toString(16).padStart(2, '0').toUpperCase()).join(':'); }
+  async function derivePwd(ufrag, fp) {
+    const data = new TextEncoder().encode('bg-nearby|' + ufrag + '|' + fp);
+    const h = new Uint8Array(await crypto.subtle.digest('SHA-256', data));
+    let s = ''; for (let i = 0; i < 24; i++) s += B64[h[i] & 63];
+    return s;
+  }
+  function parseSDP(sdp) {
+    const get = re => { const m = sdp.match(re); return m ? m[1] : ''; };
+    const cands = [];
+    for (const line of sdp.split(/\r?\n/)) {
+      const m = line.match(/^a=candidate:(\S+) 1 (udp|UDP) (\d+) (\S+) (\d+) typ (host|srflx|prflx)/);
+      if (m) cands.push({ addr: m[4], port: +m[5], prio: +m[3] });
+    }
+    return { ufrag: get(/a=ice-ufrag:(\S+)/), pwd: get(/a=ice-pwd:(\S+)/), fp: get(/a=fingerprint:sha-256 (\S+)/), setup: get(/a=setup:(\S+)/), cands };
+  }
+  function pickCandidates(cands) {
+    const v4 = cands.filter(c => /^\d+\.\d+\.\d+\.\d+$/.test(c.addr) && !c.addr.startsWith('169.254.') && c.addr !== '127.0.0.1');
+    const mdns = cands.filter(c => /\.local$/.test(c.addr));
+    const v6 = cands.filter(c => c.addr.includes(':') && !/^fe80/i.test(c.addr));
+    // keep the code short: real IPv4 addresses if we have them, otherwise mDNS names, otherwise IPv6
+    const list = v4.length ? v4 : mdns.length ? mdns : v6;
+    const out = []; const seen = new Set();
+    for (const c of list) { const k = c.addr + ':' + c.port; if (!seen.has(k)) { seen.add(k); out.push(c); } }
+    return out.slice(0, 2);
+  }
+  function compactSDP(desc, opts) {
+    const p = parseSDP(desc.sdp); opts = opts || {};
+    const bytes = [];
+    const setup = { actpass: 0, active: 1, passive: 2 }[p.setup] || 0;
+    const includePwd = !!opts.includePwd;
+    bytes.push((desc.type === 'offer' ? 0 : 1) | (setup << 1) | (includePwd ? 8 : 0));
+    bytes.push(...packUfrag(p.ufrag));
+    bytes.push(...hexToBytes(p.fp));
+    if (includePwd) { const pw = p.pwd.slice(0, 24).padEnd(24, 'A'); for (const ch of pw) bytes.push(ch.charCodeAt(0)); }
+    for (const c of pickCandidates(p.cands)) {
+      if (/^\d+\.\d+\.\d+\.\d+$/.test(c.addr)) { bytes.push(0, ...c.addr.split('.').map(Number)); }
+      else if (/\.local$/.test(c.addr)) { const hex = c.addr.replace(/\.local$/, '').replace(/-/g, ''); if (!/^[0-9a-f]{32}$/i.test(hex)) continue; bytes.push(1, ...hexToBytes(hex)); }
+      else { const b = parseIPv6(c.addr); if (!b) continue; bytes.push(2, ...b); }
+      bytes.push(c.port >> 8, c.port & 255);
+    }
+    bytes.push(bytes.reduce((a, b) => a + b, 0) & 255);
+    return groupCode(b32enc(bytes));
+  }
+  function parseIPv6(a) {
+    try {
+      const [head, tail] = a.split('::'); const h = head ? head.split(':') : [], t = tail ? tail.split(':') : [];
+      const parts = h.concat(new Array(8 - h.length - t.length).fill('0'), t);
+      if (parts.length !== 8) return null;
+      const out = []; for (const x of parts) { const v = parseInt(x || '0', 16); out.push(v >> 8, v & 255); } return out;
+    } catch (_) { return null; }
+  }
+  function fmtIPv6(b) { const parts = []; for (let i = 0; i < 16; i += 2) parts.push(((b[i] << 8) | b[i + 1]).toString(16)); return parts.join(':'); }
+  async function expandSDP(str) {
+    str = String(str).trim();
+    if (str[0] === '{') return expandSDPLegacy(str);
+    const b = b32dec(str);
+    if (b.length < 40) throw new Error('Code is too short — check that you copied all of it.');
+    const sum = Array.from(b.slice(0, b.length - 1)).reduce((a, x) => a + x, 0) & 255;
+    if (sum !== b[b.length - 1]) throw new Error('Code has a typo (checksum mismatch). Please check it and try again.');
+    const flags = b[0];
+    const type = flags & 1 ? 'answer' : 'offer';
+    const setup = ['actpass', 'active', 'passive'][(flags >> 1) & 3] || 'actpass';
+    const ufrag = unpackUfrag(b.slice(1, 4));
+    const fp = bytesToFp(b.slice(4, 36));
+    let i = 36, pwd;
+    if (flags & 8) { pwd = String.fromCharCode(...b.slice(36, 60)); i = 60; } else pwd = await derivePwd(ufrag, fp);
+    const cands = [];
+    while (i < b.length - 1) {
+      const kind = b[i++];
+      let addr;
+      if (kind === 0) { addr = Array.from(b.slice(i, i + 4)).join('.'); i += 4; }
+      else if (kind === 1) { const hx = Array.from(b.slice(i, i + 16), x => x.toString(16).padStart(2, '0')).join(''); addr = hx.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5') + '.local'; i += 16; }
+      else if (kind === 2) { addr = fmtIPv6(b.slice(i, i + 16)); i += 16; }
+      else throw new Error('Unknown address type in code');
+      const port = (b[i] << 8) | b[i + 1]; i += 2;
+      cands.push([addr, port, 2130706431 - cands.length * 256]);
+    }
+    return buildSDP({ t: type === 'offer' ? 'o' : 'a', u: ufrag, p: pwd, f: fp, s: setup, c: cands });
+  }
+  function buildSDP(o) {
+    const lines = ['v=0', 'o=- 0 0 IN IP4 127.0.0.1', 's=-', 't=0 0', 'a=group:BUNDLE 0', 'a=msid-semantic: WMS',
+      'm=application 9 UDP/DTLS/SCTP webrtc-datachannel', 'c=IN IP4 0.0.0.0', 'a=mid:0', 'a=sctp-port:5000', 'a=max-message-size:262144',
+      'a=ice-ufrag:' + o.u, 'a=ice-pwd:' + o.p, 'a=ice-options:trickle', 'a=fingerprint:sha-256 ' + o.f, 'a=setup:' + o.s];
+    o.c.forEach((c, i) => lines.push(`a=candidate:${i + 1} 1 udp ${c[2]} ${c[0]} ${c[1]} typ host generation 0`));
+    lines.push('a=end-of-candidates');
+    return { type: o.t === 'o' ? 'offer' : 'answer', sdp: lines.join('\r\n') + '\r\n' };
+  }
+  // Rewrite the local SDP's ice-pwd to the derived value (so it can be omitted from the code).
+  // Returns true if the browser accepted it; false means we must include the pwd in the code.
+  async function setLocalMunged(pc, desc) {
+    const p = parseSDP(desc.sdp);
+    try {
+      const pwd = await derivePwd(p.ufrag, p.fp);
+      const sdp = desc.sdp.replace(/a=ice-pwd:\S+/g, 'a=ice-pwd:' + pwd);
+      await pc.setLocalDescription({ type: desc.type, sdp });
+      return true;
+    } catch (e) {
+      console.warn('ice-pwd munging rejected, sending pwd in code', e);
+      await pc.setLocalDescription(desc);
+      return false;
+    }
+  }
+
+  function compactSDPLegacy(desc) {
     const sdp = desc.sdp;
     const get = re => { const m = sdp.match(re); return m ? m[1] : ''; };
     const cands = [];
@@ -80,15 +211,7 @@
     }
     return JSON.stringify({ t: desc.type === 'offer' ? 'o' : 'a', u: get(/a=ice-ufrag:(\S+)/), p: get(/a=ice-pwd:(\S+)/), f: get(/a=fingerprint:sha-256 (\S+)/), s: get(/a=setup:(\S+)/), c: cands });
   }
-  function expandSDP(str) {
-    const o = JSON.parse(str);
-    const lines = ['v=0', 'o=- 0 0 IN IP4 127.0.0.1', 's=-', 't=0 0', 'a=group:BUNDLE 0', 'a=msid-semantic: WMS',
-      'm=application 9 UDP/DTLS/SCTP webrtc-datachannel', 'c=IN IP4 0.0.0.0', 'a=mid:0', 'a=sctp-port:5000', 'a=max-message-size:262144',
-      'a=ice-ufrag:' + o.u, 'a=ice-pwd:' + o.p, 'a=ice-options:trickle', 'a=fingerprint:sha-256 ' + o.f, 'a=setup:' + o.s];
-    o.c.forEach((c, i) => lines.push(`a=candidate:${i + 1} 1 udp ${c[2]} ${c[0]} ${c[1]} typ host generation 0`));
-    lines.push('a=end-of-candidates');
-    return { type: o.t === 'o' ? 'offer' : 'answer', sdp: lines.join('\r\n') + '\r\n' };
-  }
+  function expandSDPLegacy(str) { return buildSDP(JSON.parse(str)); }
   function waitIce(pc, ms) {
     return new Promise(resolve => {
       if (pc.iceGatheringState === 'complete') return resolve();
@@ -118,24 +241,24 @@
     async createOffer() {
       this._newPC();
       this._wireDC(this.pc.createDataChannel('bg', { ordered: true }));
-      await this.pc.setLocalDescription(await this.pc.createOffer());
+      const munged = await setLocalMunged(this.pc, await this.pc.createOffer());
       await waitIce(this.pc, 3000);
-      return compactSDP(this.pc.localDescription);
+      return compactSDP(this.pc.localDescription, { includePwd: !munged });
     }
     async acceptAnswer(str) {
-      const d = expandSDP(str);
-      if (d.type !== 'answer') throw new Error('That is not an answer code. Ask the other phone to scan your code first.');
+      const d = await expandSDP(str);
+      if (d.type !== 'answer') throw new Error('That is a host code, not a reply code. Ask the other phone to enter YOUR code first — the reply code it shows is the one you need.');
       await this.pc.setRemoteDescription(d);
     }
     async createAnswer(offerStr) {
-      const d = expandSDP(offerStr);
-      if (d.type !== 'offer') throw new Error('That is not a host code.');
+      const d = await expandSDP(offerStr);
+      if (d.type !== 'offer') throw new Error('That is a reply code, not a host code. Enter the host\'s code.');
       this._newPC();
       this.pc.ondatachannel = e => this._wireDC(e.channel);
       await this.pc.setRemoteDescription(d);
-      await this.pc.setLocalDescription(await this.pc.createAnswer());
+      const munged = await setLocalMunged(this.pc, await this.pc.createAnswer());
       await waitIce(this.pc, 3000);
-      return compactSDP(this.pc.localDescription);
+      return compactSDP(this.pc.localDescription, { includePwd: !munged });
     }
     send(obj) { if (this.dc && this.dc.readyState === 'open') { this.dc.send(JSON.stringify(obj)); return true; } return false; }
     get connected() { return !!(this.dc && this.dc.readyState === 'open'); }
@@ -170,5 +293,5 @@
     stop() { this.running = false; if (this.stream) { this.stream.getTracks().forEach(t => t.stop()); this.stream = null; } this.video.srcObject = null; }
   }
 
-  root.BGNet = { PeerTransport, LocalRTC, QRScanner, makeCode, compactSDP, expandSDP };
+  root.BGNet = { PeerTransport, LocalRTC, QRScanner, makeCode, compactSDP, expandSDP, groupCode, b32enc, b32dec };
 })(window);

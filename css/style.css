@@ -170,3 +170,8 @@ input:focus, textarea:focus { border-color: var(--accent); }
   .dice { height: 40px; } .die { width: 36px; height: 36px; } .buttons { height: 38px; } .buttons .btn { padding: 7px 14px; font-size: 14px; }
   .status { font-size: 13px; height: 16px; line-height: 16px; }
 }
+
+/* ---- nearby pairing code ---- */
+.paircode-label { font-size: 12px; color: var(--muted); text-align: center; margin: 6px 0 4px; }
+.paircode { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 20px; letter-spacing: 1px; line-height: 1.5; word-break: break-all; text-align: center; background: var(--panel2); border: 1px dashed #6a5040; border-radius: 12px; padding: 10px 12px; margin: 0 0 8px; user-select: all; -webkit-user-select: all; cursor: copy; max-width: 340px; }
+.paste textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 16px; letter-spacing: 1px; text-transform: uppercase; }

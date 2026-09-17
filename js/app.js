@@ -7,8 +7,10 @@
   const VERSION = 1;
 
   // ---------------- settings & persistence ----------------
-  const settings = Object.assign({ sound: true, vibrate: true, hints: true, autodone: false, pips: true, speed: 'normal', names: {} },
+  const settings = Object.assign({ sound: true, vibrate: true, hints: false, autodone: false, pips: true, speed: 'normal', names: {}, v: 0 },
     load('bg.settings') || {});
+  // v1: legal-move highlights default to off (existing installs that never touched the toggle follow the new default)
+  if ((settings.v || 0) < 1) { settings.hints = false; settings.v = 1; }
   function load(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (_) { return null; } }
   function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} }
   function saveSettings() { save('bg.settings', settings); }
@@ -639,7 +641,22 @@
 
   // ---------------- nearby (manual WebRTC over hotspot) ----------------
   let rtc = null, scanner = null, pairRole = null;
-  function showQR(el, text) { el.innerHTML = ''; try { new QRCode(el, { text, width: 240, height: 240, correctLevel: QRCode.CorrectLevel.L }); } catch (e) { el.textContent = 'QR too large — use "Copy my code"'; } }
+  function showQR(el, text) { el.innerHTML = ''; try { new QRCode(el, { text: text.replace(/-/g, ''), width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M }); } catch (e) { el.textContent = ''; } }
+  function showMyCode(code) {
+    S.myCode = code;
+    showQR($('pair-qr'), code);
+    const plain = code.replace(/-/g, '');
+    $('pair-code').textContent = code; $('pair-code-len').textContent = plain.length;
+    $('pair-code-wrap').hidden = false;
+  }
+  function copyText(text, msg) {
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => toast(msg || 'Copied')).catch(() => fallbackCopy(text, msg));
+    else fallbackCopy(text, msg);
+  }
+  function fallbackCopy(text, msg) {
+    try { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast(msg || 'Copied'); }
+    catch (_) { toast('Long-press the code to copy it', 3000); }
+  }
   async function ensureCamera() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return false;
     try {
@@ -647,18 +664,23 @@
       s.getTracks().forEach(t => t.stop()); return true;
     } catch (_) { return false; }
   }
+  function resetPairScreen(title, instr) {
+    $('pair-title').textContent = title; $('pair-instr').innerHTML = instr; $('pair-status').textContent = '';
+    $('pair-qr').innerHTML = ''; $('pair-code-wrap').hidden = true; $('pair-code').textContent = ''; $('pair-scan').hidden = true;
+    $('pair-paste').value = ''; $('pair-paste-details').open = false;
+  }
   $('nearby-host').addEventListener('click', async () => {
     const me = nameOr($('nearby-name').value, 'Host'); settings.names.me = me; saveSettings();
     pairRole = 'host'; rtc = new Net.LocalRTC(); show('pair');
-    $('pair-title').textContent = 'Host · Step 1'; $('pair-status').textContent = 'Preparing…'; $('pair-qr').innerHTML = ''; $('pair-scan').hidden = true;
-    $('pair-instr').innerHTML = 'Make sure both phones are on the same Wi-Fi / hotspot.<br>1️⃣ Let the other phone <b>scan this code</b>. 2️⃣ Then tap <b>Scan their code</b> to scan the reply.';
-    await ensureCamera(); // permission also unlocks real local IP candidates
+    resetPairScreen('Host · Step 1', 'Both phones on the same Wi-Fi / hotspot (no internet needed).<br>1️⃣ Give the other phone <b>your code</b> — let them scan the QR, or Copy/Share it, or read it out.<br>2️⃣ They get a <b>reply code</b>: scan it or type it below.');
+    $('pair-status').textContent = 'Preparing your code…';
+    await ensureCamera(); // permission also unlocks real local IP candidates (shorter code, more reliable)
     try {
       S = { mode: 'nearby', net: rtc, isHost: true, pending: { myName: me, target: +segVal('nearby-target'), cube: $('nearby-cube').checked }, busy: false, selected: null, players: { W: { name: me, type: 'human' }, B: { name: '…', type: 'remote' } }, match: BG.newMatch({ nameW: me }), game: null, mySide: W, gameOverShown: false };
       S.game = BG.newGame(S.match);
       const offer = await rtc.createOffer();
-      S.myCode = offer; showQR($('pair-qr'), offer);
-      $('pair-status').textContent = 'Waiting for the other phone…';
+      showMyCode(offer);
+      $('pair-status').textContent = 'Waiting for the other phone\'s reply code…';
       rtc.onopen = () => { $('pair-status').textContent = 'Connected!'; stopScan(); attachNet(rtc, true); };
       rtc.onclose = r => $('pair-status').textContent = '⚠ ' + r;
     } catch (e) { $('pair-status').textContent = 'Error: ' + e.message; }
@@ -666,43 +688,58 @@
   $('nearby-join').addEventListener('click', async () => {
     const me = nameOr($('nearby-name').value, 'Guest'); settings.names.me = me; saveSettings();
     pairRole = 'join'; rtc = new Net.LocalRTC(); show('pair');
-    $('pair-title').textContent = 'Join · Step 2'; $('pair-status').textContent = ''; $('pair-qr').innerHTML = ''; $('pair-scan').hidden = true;
-    $('pair-instr').innerHTML = '1️⃣ Tap <b>Scan their code</b> and scan the host\'s QR. 2️⃣ A reply code appears — let the host scan it.';
+    resetPairScreen('Join · Step 2', '1️⃣ Enter the <b>host\'s code</b>: scan their QR, or type/paste it below.<br>2️⃣ Your <b>reply code</b> appears — give it to the host the same way.');
     S = { mode: 'nearby', net: rtc, isHost: false, busy: false, selected: null, players: { W: { name: '…', type: 'remote' }, B: { name: me, type: 'human' } }, match: BG.newMatch(), game: null, mySide: B, gameOverShown: false, myName: me };
     S.game = BG.newGame(S.match);
+    $('pair-paste-details').open = true;
     await ensureCamera();
     startScan();
   });
   async function onPairCode(text) {
     text = (text || '').trim();
+    if (!text) return;
     try {
       if (pairRole === 'host') {
-        await rtc.acceptAnswer(text); $('pair-status').textContent = 'Connecting…';
+        $('pair-status').textContent = 'Connecting…';
+        await rtc.acceptAnswer(text);
       } else {
-        $('pair-status').textContent = 'Creating reply code…';
-        const answer = await rtc.createAnswer(text); S.myCode = answer;
-        showQR($('pair-qr'), answer);
-        $('pair-status').textContent = 'Now let the host scan this reply code. Connecting…';
+        $('pair-status').textContent = 'Creating your reply code…';
+        const answer = await rtc.createAnswer(text);
+        showMyCode(answer);
+        $('pair-paste-details').open = false;
+        $('pair-status').textContent = 'Now give this reply code to the host (scan / share / read out). Connecting…';
         rtc.onopen = () => { $('pair-status').textContent = 'Connected!'; attachNet(rtc, false, { myName: S.myName }); };
         rtc.onclose = r => $('pair-status').textContent = '⚠ ' + r;
       }
-    } catch (e) { $('pair-status').textContent = 'Error: ' + e.message; beep('alert'); }
+    } catch (e) { $('pair-status').textContent = '⚠ ' + e.message; beep('alert'); }
   }
   function startScan() {
     if (!scanner) scanner = new Net.QRScanner($('pair-video'), $('pair-canvas'));
-    $('pair-scan').hidden = false; $('pair-status').textContent = 'Point the camera at the other phone\'s code…';
+    $('pair-scan').hidden = false; $('pair-status').textContent = 'Point the camera at the other phone\'s QR code…';
     scanner.start(code => { $('pair-scan').hidden = true; beep('click'); onPairCode(code); }).catch(e => {
       $('pair-scan').hidden = true;
       const denied = /NotAllowed|Permission|denied|dismissed/i.test(e.name + ' ' + e.message);
+      $('pair-paste-details').open = true;
       $('pair-status').innerHTML = denied
-        ? 'Camera permission not granted. If your browser says it <b>can\'t ask for permission</b>, close floating bubbles/overlays from other apps (chat heads, assistant buttons, screen filters), then tap <b>Scan their code</b> again. Or use <b>Copy my code</b> → send it with Quick Share / Nearby Share (Bluetooth, works in airplane mode) → <b>Paste code manually</b> on the other phone.'
-        : 'Camera unavailable (' + escapeHTML(e.message) + '). Use "Copy my code" + "Paste code manually" instead.';
+        ? 'No camera permission — no problem: <b>type or paste their code</b> below instead. (If the browser said it <b>can\'t ask for permission</b>, close floating bubbles/overlays from other apps and tap Scan again.)'
+        : 'Camera unavailable — type or paste their code below instead.';
     });
   }
   function stopScan() { if (scanner) scanner.stop(); $('pair-scan').hidden = true; }
   $('pair-scan-btn').addEventListener('click', startScan);
-  $('pair-copy-btn').addEventListener('click', () => { if (!S || !S.myCode) { toast('No code yet'); return; } shareText('Backgammon pairing code', S.myCode); });
-  $('pair-paste-btn').addEventListener('click', () => { const v = $('pair-paste').value.trim(); if (v) { $('pair-paste').value = ''; onPairCode(v); } });
+  $('pair-copy-btn').addEventListener('click', () => { if (!S || !S.myCode) { toast('No code yet'); return; } copyText(S.myCode, 'Code copied — send it any way you like'); });
+  $('pair-code').addEventListener('click', () => { if (S && S.myCode) copyText(S.myCode, 'Code copied'); });
+  $('pair-share-btn').addEventListener('click', () => {
+    if (!S || !S.myCode) { toast('No code yet'); return; }
+    if (navigator.share) navigator.share({ title: 'Backgammon pairing code', text: 'Backgammon pairing code:\n' + S.myCode }).catch(() => {});
+    else copyText(S.myCode, 'Sharing not available here — code copied instead');
+  });
+  $('pair-paste-btn').addEventListener('click', () => { const v = $('pair-paste').value.trim(); if (v) onPairCode(v); });
+  $('pair-paste').addEventListener('input', () => {
+    // auto-submit when a complete-looking code has been pasted/typed (checksum decides)
+    const v = $('pair-paste').value; const plain = v.replace(/[^0-9A-Za-z]/g, '');
+    if (plain.length >= 64 && /\n$/.test(v)) { $('pair-paste').value = v.trim(); onPairCode(v); }
+  });
   $('pair-cancel').addEventListener('click', () => { stopScan(); if (rtc) rtc.close(); rtc = null; S = null; show('nearby'); });
 
   // ---------------- settings ----------------
