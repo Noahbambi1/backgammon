@@ -47,7 +47,7 @@ Bluetooth transport would plug into `js/app.js` unchanged.
 
 ## Rules implemented
 
-Opening roll — each player taps to roll one die, higher starts and plays both dice, ties re-roll · must play both dice when possible, otherwise the higher
+Opening roll — each player taps to roll one die, higher starts; the winner may play those two dice or roll again (house rule), ties re-roll · must play both dice when possible, otherwise the higher
 die · doubles play four times · hitting and entering from the bar · bearing off (exact die, or a higher
 die when no checker is farther back) · doubling cube with ownership, take/pass, redoubles to 64 ·
 Crawford rule in match play · gammon ×2, backgammon ×3 · match to 1/3/5/7 or unlimited (money game) ·

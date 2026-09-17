@@ -198,11 +198,26 @@
   // ---------- game flow ----------
   function rollDie(rng) { return 1 + Math.floor((rng || Math.random)() * 6); }
 
-  // Opening: each player rolls one die; higher starts and plays both dice. Ties re-roll.
+  // Opening: each player rolls one die; higher starts. The winner may then play those two dice or
+  // re-roll (house rule, phase 'openchoice'). Ties re-roll automatically.
+  // openingRoll() does the whole thing in one go and keeps the dice (used by tests and simulations).
   function openingRoll(g, rng) {
     if (g.phase !== 'opening') throw new Error('not opening');
     g.opening.W = 0; g.opening.B = 0;
     openingRollFor(g, W, rng); openingRollFor(g, B, rng);
+    if (g.phase === 'openchoice') openingKeep(g);
+    return g;
+  }
+  function openingKeep(g) {
+    if (g.phase !== 'openchoice') throw new Error('no opening choice pending');
+    startMovePhase(g);
+    g.lastAction = { type: 'openkeep', player: g.turn, dice: g.dice.slice() };
+    return g;
+  }
+  function openingReroll(g) {
+    if (g.phase !== 'openchoice') throw new Error('no opening choice pending');
+    g.phase = 'roll'; g.dice = [0, 0]; g.remaining = [];
+    g.lastAction = { type: 'openreroll', player: g.turn };
     return g;
   }
   function openingRollFor(g, side, rng) {
@@ -218,7 +233,7 @@
     if (a === b) { g.opening = { W: 0, B: 0, ties: g.opening.ties + 1 }; g.lastAction = { type: 'opening-tie', W: a, B: b }; return g; }
     g.turn = a > b ? W : B;
     g.dice = [a, b];
-    startMovePhase(g);
+    g.phase = 'openchoice'; g.remaining = [];
     g.lastAction = { type: 'opening', W: a, B: b, first: g.turn };
     return g;
   }
@@ -426,7 +441,7 @@
   function describeMove(p, m) { return pointLabel(p, m.from) + '/' + pointLabel(p, m.to) + (m.hit ? '*' : ''); }
 
   return {
-    W, B, other, sign, newMatch, newGame, openingRoll, openingRollFor, roll, move, playMoves, undo, endTurn,
+    W, B, other, sign, newMatch, newGame, openingRoll, openingRollFor, openingKeep, openingReroll, roll, move, playMoves, undo, endTurn,
     legalNextMoves, legalPlays, uniquePlays, consistentPlays, canEndTurn, isTurnComplete, chainMoves,
     canDouble, offerDouble, acceptDouble, declineDouble, resign, recordResult,
     pipCount, allHome, countAt, cloneBoard, applyMove, singleMoves, boardKey,

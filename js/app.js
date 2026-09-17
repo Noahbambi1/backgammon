@@ -235,6 +235,7 @@
     }
     if (g.phase === 'over') return g.winner ? n(g.winner) + ' wins the game' : 'Game over';
     const ctl = controller(g.turn);
+    if (g.phase === 'openchoice') return ctl === 'human' ? n(g.turn) + ' — play the opening roll or roll again' : n(g.turn) + ' decides: play the opening roll or roll again…';
     if (g.phase === 'roll') return ctl === 'human' ? n(g.turn) + ' — roll the dice' : ctl === 'bot' ? n(g.turn) + ' is thinking…' : 'Waiting for ' + n(g.turn) + ' to roll…';
     if (g.phase === 'double') { const r = BG.other(g.turn); return n(g.turn) + ' offers a double to ' + (g.cube.value * 2) + ' — ' + (controller(r) === 'human' ? n(r) + ' decides' : 'waiting for ' + n(r)); }
     if (g.phase === 'move') {
@@ -369,6 +370,11 @@
       return;
     }
     const ctl = controller(g.turn);
+    if (g.phase === 'openchoice') {
+      if (ctl === 'human') askOpeningChoice();
+      else if (ctl === 'bot') await botOpeningChoice(token);
+      return; // remote: wait for the host's state
+    }
     if (g.phase === 'roll') {
       if (S.mode === 'local' || (S.mode !== 'bot' && ctl === 'human')) announceTurn();
       if (ctl === 'bot') await botPreRoll(token);
@@ -427,11 +433,38 @@
     const la = g.lastAction;
     if (la.type === 'opening-die') { await sleep(speedMs(500)); S.busy = false; tick(); return; }
     if (la.type === 'opening-tie') { board.flashBanner('Tie! Roll again', `${la.W} – ${la.B}`, 1200); await sleep(speedMs(1200)); if (S.game === g) { S.busy = false; tick(); } return; }
-    recordRoll(g.dice, g.turn);
     board.flashBanner(escapeHTML(myName(g.turn)) + ' starts', `${myName(W)} rolled ${la.W}, ${myName(B)} rolled ${la.B}`, 1600);
     await sleep(speedMs(1400));
     if (S.game !== g) return;
     S.busy = false; lastAnnounced = null; tick();
+  }
+  // The opening winner may play the two opening dice or roll again (any roll, doubles included).
+  function askOpeningChoice() {
+    const g = S.game; if (g.phase !== 'openchoice' || modalOpen) return;
+    const [a, b] = g.dice;
+    beep('alert');
+    showModal(escapeHTML(myName(g.turn)) + ' won the opening roll', `<div class="dice mini">${UI.dieHTML(a, g.turn)}${UI.dieHTML(b, g.turn)}</div><b>${escapeHTML(myName(g.turn))}</b>, play this <b>${Math.max(a, b)}-${Math.min(a, b)}</b> or roll again?`, [
+      { label: `Play ${Math.max(a, b)}-${Math.min(a, b)}`, cls: 'primary', cb: () => openingDecide(true) },
+      { label: '🎲 Roll again', cb: () => openingDecide(false) },
+    ]);
+  }
+  function openingDecide(keep) {
+    const g = S.game; if (g.phase !== 'openchoice') return;
+    if (!isAuthority()) { netSend({ t: 'action', a: keep ? 'openkeep' : 'openreroll' }); S.busy = true; render(); return; }
+    applyOpeningChoice(keep);
+  }
+  function applyOpeningChoice(keep) {
+    const g = S.game; if (g.phase !== 'openchoice') return;
+    if (keep) { BG.openingKeep(g); recordRoll(g.dice, g.turn); beep('click'); }
+    else { BG.openingReroll(g); board.flashBanner(escapeHTML(myName(g.turn)) + ' rolls again', '', 1000); beep('dice'); }
+    lastAnnounced = null; broadcastState(); tick();
+  }
+  async function botOpeningChoice(token) {
+    const g = S.game; S.busy = true; render();
+    await sleep(speedMs(800));
+    if (tickToken !== token || S.game !== g) return;
+    S.busy = false;
+    applyOpeningChoice(AI.keepOpening ? AI.keepOpening(g.dice, S.level, rng) : true);
   }
 
   // ---------------- bot ----------------
@@ -583,7 +616,7 @@
     const hist = m.history.length ? '<div class="history">' + m.history.map(h => `<div><span>Game ${h.game}</span><span>${escapeHTML(myName(h.winner))} +${h.points}${h.type !== 'single' ? ' (' + h.type + ')' : ''}</span></div>`).join('') + '</div>' : '<p>No games finished yet.</p>';
     const buttons = [];
     if (fsSupported()) buttons.push({ label: document.fullscreenElement ? 'Exit fullscreen' : '⛶ Fullscreen (hide browser bar)', cb: toggleFullscreen });
-    const canResign = S.game.phase !== 'over' && S.game.phase !== 'opening' && (isLocalHuman(W) || isLocalHuman(B));
+    const canResign = S.game.phase !== 'over' && S.game.phase !== 'opening' && S.game.phase !== 'openchoice' && (isLocalHuman(W) || isLocalHuman(B));
     if (canResign) buttons.push({ label: 'Resign this game', cls: 'danger', cb: confirmResign });
     buttons.push({ label: 'Leave game', cls: 'danger', cb: () => showModal('Leave game?', S.net ? 'Your opponent will be disconnected.' : 'You can resume a bot or local game later from the menu.', [{ label: 'Leave', cls: 'danger', cb: leaveToMenu }, { label: 'Stay' }]) });
     buttons.push({ label: 'Continue' });
@@ -718,6 +751,7 @@
       switch (msg.a) {
         case 'roll': if (g.phase === 'roll' && g.turn === guest) { tickToken++; doRoll(); return; } break;
         case 'openroll': if (g.phase === 'opening' && !g.opening[guest]) { applyOpeningRoll(guest); return; } break;
+        case 'openkeep': case 'openreroll': if (g.phase === 'openchoice' && g.turn === guest) { applyOpeningChoice(msg.a === 'openkeep'); return; } break;
         case 'move': if (g.phase === 'move' && g.turn === guest) { const m = BG.move(g, msg.from, msg.to, msg.die); board.animateMove(guest, m.from, m.to, m.hit).then(() => { render(); beep(m.hit ? 'hit' : 'click'); if (g.phase === 'over') tick(); }); } break;
         case 'undo': if (g.phase === 'move' && g.turn === guest) BG.undo(g); break;
         case 'end': if (g.phase === 'move' && g.turn === guest && BG.canEndTurn(g)) { BG.endTurn(g); lastAnnounced = null; broadcastState(); tick(); return; } break;
@@ -751,6 +785,8 @@
     if (la && la.type === 'roll' && la.player === S.mySide) { beep('dice'); S.game = g; render({ rollAnim: true }); setTimeout(tick, 100); return; }
     if (la && la.type === 'opening-die') { beep('dice'); S.game = g; render(); $('dice').innerHTML = UI.openingDiceHTML(g.opening.W, g.opening.B, la.player); return; }
     if (la && la.type === 'opening' && prev && prev.phase === 'opening') { beep('dice'); S.game = g; render(); $('dice').innerHTML = UI.openingDiceHTML(la.W, la.B, la.first); board.flashBanner(escapeHTML(g.turn === S.mySide ? 'You start' : myName(g.turn) + ' starts'), `${la.W} – ${la.B}`, 1600); S.busy = true; setTimeout(() => { if (S && S.game === g) { S.busy = false; tick(); } }, speedMs(1400)); return; }
+    if (la && la.type === 'openreroll') { hideModalIf('won the opening roll'); board.flashBanner(escapeHTML(myName(la.player)) + ' rolls again', '', 1000); }
+    if (la && la.type === 'openkeep') { hideModalIf('won the opening roll'); beep('click'); }
     if (la && la.type === 'opening-tie') { beep('dice'); S.game = g; render(); $('dice').innerHTML = UI.openingDiceHTML(la.W, la.B); board.flashBanner('Tie! Roll again', `${la.W} – ${la.B}`, 1200); return; }
     if (la && la.type === 'double' && la.player === remote) beep('alert');
     if (la && la.type === 'take' && la.player === remote) { beep('cube'); board.flashBanner(escapeHTML(myName(remote)) + ' takes', 'Cube is now ' + g.cube.value, 1300); }
@@ -759,7 +795,8 @@
     if (g.phase !== 'double') hideModalIfTake();
     tick();
   }
-  function hideModalIfTake() { if (modalOpen && $('modal-title').textContent.includes('doubles')) hideModal(); }
+  function hideModalIfTake() { hideModalIf('doubles'); }
+  function hideModalIf(txt) { if (modalOpen && $('modal-title').textContent.includes(txt)) hideModal(); }
 
   // ---------------- online (PeerJS) ----------------
   let pendingNet = null;

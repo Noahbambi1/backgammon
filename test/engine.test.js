@@ -178,8 +178,12 @@ t('openingRollFor: each side rolls one die, higher starts with both dice, ties r
   assert.strictEqual(g.lastAction.type, 'opening-tie'); assert.strictEqual(g.opening.ties, 1);
   assert.strictEqual(g.opening.W, 0); assert.strictEqual(g.opening.B, 0);
   BG.openingRollFor(g, 'W', () => 0.2);             // White 2
-  BG.openingRollFor(g, 'B', () => 0.7);             // Black 5 -> Black starts with 2-5
-  assert.strictEqual(g.phase, 'move'); assert.strictEqual(g.turn, 'B'); assert.deepStrictEqual(g.dice.slice().sort(), [2, 5]);
+  BG.openingRollFor(g, 'B', () => 0.7);             // Black 5 -> Black wins the opening, decides on 2-5
+  assert.strictEqual(g.phase, 'openchoice'); assert.strictEqual(g.turn, 'B'); assert.deepStrictEqual(g.dice.slice().sort(), [2, 5]);
+  const g2 = BG.deserialize(BG.serialize(g));
+  BG.openingKeep(g); assert.strictEqual(g.phase, 'move'); assert.deepStrictEqual(g.remaining.slice().sort(), [2, 5]);
+  BG.openingReroll(g2); assert.strictEqual(g2.phase, 'roll'); assert.strictEqual(g2.turn, 'B');
+  BG.roll(g2, () => 0.5); assert.strictEqual(g2.phase, 'move'); assert.deepStrictEqual(g2.dice, [4, 4]); // doubles allowed on a re-roll
 });
 
 console.log(passed + ' tests passed');

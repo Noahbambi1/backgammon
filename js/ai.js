@@ -168,5 +168,15 @@
     return wp >= (level === 'hard' ? 0.24 : 0.22);
   }
 
-  return { choosePlay, evaluate, winProb, shouldDouble, shouldTake, isContact, ROLLS };
+  // Opening winner's choice: play the opening dice or roll again? Based on the well-known ranking of
+  // opening rolls (3-1, 4-2, 6-1, 5-3 are the best; 6-5, 4-3, 6-4 are fine; the rest are below a
+  // random re-roll, which may also produce doubles).
+  const GOOD_OPENINGS = { medium: ['31', '42', '61', '53', '65'], hard: ['31', '42', '61', '53', '65', '43', '64'] };
+  function keepOpening(dice, level, rng) {
+    if (level === 'easy') return (rng || Math.random)() < 0.6;
+    const key = '' + Math.max(dice[0], dice[1]) + Math.min(dice[0], dice[1]);
+    return (GOOD_OPENINGS[level] || GOOD_OPENINGS.hard).includes(key);
+  }
+
+  return { choosePlay, evaluate, winProb, shouldDouble, shouldTake, isContact, keepOpening, ROLLS };
 });

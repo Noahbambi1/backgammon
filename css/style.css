@@ -230,3 +230,5 @@ input:focus, textarea:focus { border-color: var(--accent); }
 .dstat-bar i { display: block; height: 100%; background: var(--accent); border-radius: 5px; }
 .dstat-foot { margin-top: 8px; color: var(--muted); line-height: 1.4; }
 .dstat small, .dstat-head small { color: var(--muted); }
+
+.dice.mini { height: auto; margin: 4px 0 10px; } .dice.mini .die { width: 40px; height: 40px; }

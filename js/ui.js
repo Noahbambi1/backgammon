@@ -275,6 +275,7 @@
     if (!game) { el.innerHTML = ''; return; }
     if (game.phase === 'opening') { el.innerHTML = openingDiceHTML(game.opening.W, game.opening.B); return; }
     if (game.phase === 'roll' || game.phase === 'double') { el.innerHTML = ''; return; }
+    if (game.phase === 'openchoice') { el.innerHTML = dieHTML(game.dice[0], game.turn + (animate ? ' rolling' : '')) + dieHTML(game.dice[1], game.turn + (animate ? ' rolling' : '')); return; }
     if (game.phase === 'over' && !game.dice[0]) { el.innerHTML = ''; return; }
     const [a, b] = game.dice; const p = game.turn;
     const rem = game.remaining.slice();
