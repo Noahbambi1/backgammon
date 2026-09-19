@@ -47,7 +47,7 @@ input:focus, textarea:focus { border-color: var(--accent); }
 /* ---- menu ---- */
 .menu-wrap { margin: auto; width: 100%; max-width: 440px; padding: 24px 20px calc(24px + var(--safe-bottom)); text-align: center; }
 .logo { font-size: 38px; margin: 24px 0 6px; letter-spacing: 1px; display: flex; align-items: center; justify-content: center; gap: 12px; }
-.logo-dot { width: 26px; height: 26px; border-radius: 50%; display: inline-block; box-shadow: inset 0 -3px 6px rgba(0,0,0,.35); }
+.logo-dot { width: 26px; height: 26px; flex: none; border-radius: 50%; display: inline-block; box-shadow: inset 0 -3px 6px rgba(0,0,0,.35); }
 .logo-dot.w { background: var(--white-chk); } .logo-dot.b { background: var(--black-chk); border: 1px solid #555; }
 .tagline { color: var(--muted); margin: 0 0 28px; }
 .menu-buttons { display: flex; flex-direction: column; gap: 12px; }
@@ -151,8 +151,8 @@ input:focus, textarea:focus { border-color: var(--accent); }
 .conn { position: absolute; top: calc(52px + var(--safe-top)); left: 50%; transform: translateX(-50%); background: var(--bad); color: #fff; padding: 6px 12px; border-radius: 10px; font-size: 13px; z-index: 40; }
 
 /* ---- modal / toast ---- */
-.modal-back { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
-.modal { background: var(--panel); border-radius: 18px; padding: 22px; width: 100%; max-width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,.6); animation: pop .2s ease-out; }
+.modal-back { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 12px; }
+.modal { background: var(--panel); border-radius: 18px; padding: 20px; width: 100%; max-width: 400px; max-height: calc(100dvh - 24px); overflow-y: auto; -webkit-overflow-scrolling: touch; box-shadow: 0 20px 60px rgba(0,0,0,.6); animation: pop .2s ease-out; }
 @keyframes pop { from { transform: scale(.9); opacity: 0; } }
 .modal h3 { margin: 0 0 10px; font-size: 20px; }
 .modal #modal-body { color: var(--muted); line-height: 1.45; font-size: 15px; }
@@ -375,3 +375,27 @@ html[data-chips="metal"] { /* brushed gold & silver */
 .theme-preview .checker { position: absolute; width: 30px; height: 30px; transition: none; }
 
 .form h3.sub { margin: 14px 0 2px; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+
+/* ---- readable menus on phones ---- */
+.modal-buttons .btn { padding: 12px 16px; }
+@media (orientation: landscape) and (max-height: 560px) {
+  /* game/dialog modals: text on the left, buttons stacked on the right, everything visible without scrolling */
+  .modal { max-width: 700px; display: grid; grid-template-columns: minmax(0, 1fr) 210px; grid-template-areas: "title title" "body buttons"; column-gap: 18px; padding: 14px 18px; }
+  .modal h3 { grid-area: title; font-size: 18px; margin-bottom: 6px; }
+  .modal #modal-body { grid-area: body; font-size: 14px; overflow-y: auto; max-height: calc(100dvh - 110px); padding-right: 4px; }
+  .modal-buttons { grid-area: buttons; margin-top: 0; gap: 8px; align-self: start; }
+  .modal-buttons .btn { padding: 10px 12px; font-size: 15px; }
+  .history { max-height: 120px; }
+  /* main menu: logo + tagline left, the mode buttons in two columns */
+  .menu-wrap { max-width: none; margin: 0; padding: 10px 56px 10px 20px; display: grid; grid-template-columns: 240px 1fr; grid-template-areas: "logo buttons" "tag buttons" "foot foot"; column-gap: 20px; align-items: center; text-align: left; height: 100%; align-content: center; }
+  .logo { grid-area: logo; font-size: 30px; margin: 0; justify-content: flex-start; }
+  .tagline { grid-area: tag; margin: 4px 0 0; }
+  .menu-buttons { grid-area: buttons; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .menu-buttons .btn { padding: 12px 14px; font-size: 15px; }
+  .menu-buttons .btn.ghost { grid-column: 1 / -1; }
+  .footnote { grid-area: foot; margin: 6px 0 0; }
+  .menu-mute { top: 8px; right: 12px; }
+  /* setup screens: two columns of fields */
+  .form:not(.center) { max-width: 760px; display: grid; grid-template-columns: 1fr 1fr; column-gap: 20px; row-gap: 10px; padding: 4px 20px 16px; }
+  .form:not(.center) > .btn.big, .form:not(.center) > .two, .form:not(.center) > .hint, .form:not(.center) > .card, .form:not(.center) > h3.sub, .form:not(.center) > .theme-row, .form:not(.center) > .theme-preview { grid-column: 1 / -1; }
+}

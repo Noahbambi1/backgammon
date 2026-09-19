@@ -103,6 +103,8 @@
     }
   }
   applyTheme();
+  // re-render the scoreboard/controls on rotation (the board itself re-lays out via ResizeObserver)
+  let resizeT; window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (S) render(); }, 120); });
   for (const [id, key] of [['set-board', 'board'], ['set-chips', 'chips']]) {
     const row = document.getElementById(id); if (!row) continue;
     row.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; settings[key] = b.dataset.v; saveSettings(); applyTheme(); beep('ui'); });
@@ -277,18 +279,11 @@
     if (S.selected !== null) {
       const dests = destsFor(S.selected);
       if (dests.includes(loc)) { tryMove(S.selected, loc); return; }
-      if (loc === S.selected) {
-        // tapping the selected checker again: move it if there is a single destination
-        if (dests.length === 1) { tryMove(S.selected, dests[0]); return; }
-        S.selected = null; render(); return;
-      }
+      // tapping the selected checker again (or anywhere it can't go) just deselects — nothing moves
+      if (loc === S.selected) { S.selected = null; render(); return; }
     }
+    // a checker only moves after it has been explicitly selected; a bare tap on a point never moves anything
     if (loc !== 'off' && sources().includes(loc)) { S.selected = loc; beep('pick'); render(); return; }
-    // tap a destination directly when exactly one source can reach it (directly or in several steps)
-    const cands = BG.legalNextMoves(g).filter(m => m.to === loc);
-    let froms = Array.from(new Set(cands.map(m => m.from)));
-    if (!froms.length) froms = sources().filter(s => destsFor(s).includes(loc));
-    if (froms.length === 1) { tryMove(froms[0], loc); return; }
     S.selected = null; render();
   }
   function tryMove(from, to) {
@@ -334,7 +329,7 @@
     render();
     if (g.phase === 'over') { tick(); return; }
     if (BG.legalNextMoves(g).length === 0) {
-      if (settings.autodone || g.remaining.length === 0) {
+      if (settings.autodone) {
         const turn = g.turn, n = g.moves.length; S.busy = true; render();
         setTimeout(() => {
           if (!S) return; S.busy = false;
