@@ -91,6 +91,23 @@
     seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); beep('click');
     if (seg.id === 'set-speed') { settings.speed = b.dataset.v; saveSettings(); }
   }));
+  // ---------------- no zooming on phones ----------------
+  // iOS Safari ignores the viewport's user-scalable=no and sometimes zooms on a fast double tap even
+  // with touch-action set. Belt and braces: swallow the second tap of a double tap and any pinch.
+  (function noZoom() {
+    let lastTouchEnd = 0;
+    const isField = t => t && t.closest && t.closest('input, textarea, select, a');
+    document.addEventListener('touchend', e => {
+      const now = Date.now();
+      if (now - lastTouchEnd <= 350 && !isField(e.target)) e.preventDefault(); // second tap of a double tap
+      lastTouchEnd = now;
+    }, { passive: false });
+    document.addEventListener('touchmove', e => { if (e.scale !== undefined && e.scale !== 1) e.preventDefault(); }, { passive: false });
+    document.addEventListener('gesturestart', e => e.preventDefault(), { passive: false });
+    document.addEventListener('gesturechange', e => e.preventDefault(), { passive: false });
+    document.addEventListener('dblclick', e => { if (!isField(e.target)) e.preventDefault(); }, { passive: false });
+  })();
+
   // ---------------- themes ----------------
   const THEMES = { board: ['walnut', 'felt', 'mahogany', 'ebony', 'navy'], chips: ['marble', 'ivory', 'wood', 'glass', 'metal'] };
   function applyTheme() {
