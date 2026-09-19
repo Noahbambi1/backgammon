@@ -219,12 +219,12 @@
       const el = $(id);
       el.querySelector('.sb-dot').className = 'sb-dot ' + side;
       el.querySelector('.sb-name').textContent = myName(side);
-      el.querySelector('.sb-pips').textContent = settings.pips ? BG.pipCount(g, side) + (window.innerWidth < 480 ? 'p' : ' pips') : '';
+      el.querySelector('.sb-pips').textContent = settings.pips ? BG.pipCount(g, side) + ' pips' : '';
       el.querySelector('.sb-score').textContent = m.scores[side];
       el.classList.toggle('active', g.turn === side && g.phase !== 'over');
     }
     const narrow = window.innerWidth < 480;
-    $('sb-mid').textContent = m.target ? (narrow ? 'to ' : 'match to ') + m.target + (m.crawfordGame ? (narrow ? ' ·C' : ' · Crawford') : '') : (narrow ? '∞' : 'money game');
+    $('sb-mid').textContent = m.target ? 'match to ' + m.target + (m.crawfordGame ? ' · Crawford' : '') : 'money game';
     const cube = $('cube');
     cube.classList.toggle('hidden', !m.cubeEnabled);
     cube.textContent = g.cube.value === 1 ? '64' : g.cube.value;

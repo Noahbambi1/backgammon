@@ -399,3 +399,17 @@ html[data-chips="metal"] { /* brushed gold & silver */
   .form:not(.center) { max-width: 760px; display: grid; grid-template-columns: 1fr 1fr; column-gap: 20px; row-gap: 10px; padding: 4px 20px 16px; }
   .form:not(.center) > .btn.big, .form:not(.center) > .two, .form:not(.center) > .hint, .form:not(.center) > .card, .form:not(.center) > h3.sub, .form:not(.center) > .theme-row, .form:not(.center) > .theme-preview { grid-column: 1 / -1; }
 }
+
+/* ---- portrait score bar: one line per player so names never get cut ---- */
+@media (orientation: portrait), (min-height: 561px) {
+  .scoreboard { grid-template-columns: 1fr; gap: 3px; padding: 5px 10px; font-size: 14px; }
+  .sb-player { gap: 8px; }
+  .sb-player#sb-bottom { justify-content: flex-start; }
+  .sb-player#sb-bottom .sb-dot { order: 0; } .sb-player#sb-bottom .sb-name { order: 1; } .sb-player#sb-bottom .sb-pips { order: 2; } .sb-player#sb-bottom .sb-score { order: 3; }
+  .sb-player .sb-score { margin-left: auto; }
+  .sb-player#sb-top { order: 0; } .sb-player#sb-bottom { order: 1; }
+  .sb-mid { order: 2; text-align: center; font-size: 11px; padding: 0; line-height: 1.1; }
+  .sb-name { flex: 1 1 auto; }
+  .sb-pips { display: inline; }
+  .gamebar { align-items: center; }
+}
